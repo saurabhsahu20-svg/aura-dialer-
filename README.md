@@ -1,6 +1,16 @@
-# S call — Android Dialer (v1.0 source preview)
+# S call — Android Dialer (v1.0 Preview)
 
-**S call** is a privacy-focused Android dialer project with a restrained, navy-blue Material 3 interface. Includes the user's approved blue call icon, imported as launcher and adaptive assets.
+**S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal navy-blue Material 3 interface and the approved blue S call launcher icon.
+
+[![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
+
+## 📲 Download S call v1.0 Preview
+
+**[Download Android APK (GitHub Release)](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.0.0-preview/app-debug.apk)**
+
+**[View S call v1.0 Preview Release](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.0.0-preview)**
+
+The APK is **debug-signed**, and is provided for evaluation. **GitHub Actions compilation passed**, but physical-phone call handling and lock-screen behavior still require testing before everyday use.
 
 ## What's implemented in the source
 
@@ -20,13 +30,14 @@
 
 ### With GitHub Actions (recommended if you lack a local Android SDK)
 
-1. Upload the contents of this directory to a GitHub repository, retaining `.github/workflows/android-debug-apk.yml`.
-2. Open your repository's **Actions** tab.
-3. Choose **Build S call debug APK** and click **Run workflow**.
-4. When the workflow completes successfully, open that run and download **S-call-debug-apk** under Artifacts.
-5. The ZIP artifact contains `app-debug.apk`.
+1. Open this repository's **Actions** tab.
+2. Choose **Build S call debug APK** and select **Run workflow**.
+3. After a successful run, download **S-call-debug-apk** under Artifacts.
+4. The ZIP artifact contains `app-debug.apk`.
 
-A successful workflow is required before describing the APK as built; the source archive is **not an APK**.
+A successful APK build has already been verified in [this workflow run](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/runs/43687891267).
+
+The source project and the downloadable APK are separate files.
 
 ### With Android Studio
 
@@ -49,7 +60,7 @@ Note: The source bundle does not include the Gradle wrapper JAR. Android Studio 
 
 ## Important caveats
 
-- This is a **first implementation**, not yet compile-verified or physically tested in the present environment: Android SDK/Gradle and external network were unavailable while it was created. Resolve any build/device issues before everyday use.
+- This is a **first implementation**: it **compiled successfully in GitHub Actions**, but has **not been tested on a physical Android phone**. Verify calling and incoming-call behavior before everyday use.
 - A default dialer cannot promise call recording, online unknown-number identification or full-screen behavior under every OS, permission and carrier combination. These services are **not included** in this build.
 - Photo selection is supported; pinch-to-crop and repositioning editor are future enhancements.
 - Android 14+ may limit full-screen intent activation. Users may need notification/full-screen intent approval; Android chooses when to present heads-up instead of full-screen UI.
@@ -70,4 +81,4 @@ app/src/main/java/com/scall/phone/
 
 ## Project status
 
-Current delivery: **source project + build workflow**, **APK not built or device-tested**. This distinction is intentional.
+Current delivery: **public source code + verified GitHub Actions APK + public GitHub Preview Release**. **Actual-device calling and reliability tests are still pending**.
