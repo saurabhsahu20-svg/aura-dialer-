@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.IntOffset
 import coil.compose.AsyncImage
 import com.scall.phone.data.PhoneRepository
 import com.scall.phone.data.PhotoStore
+import com.scall.phone.data.CallerPhotoStyle
 import com.scall.phone.telecom.CallBridge
 import com.scall.phone.telecom.CallSnapshot
 import kotlinx.coroutines.Dispatchers
@@ -49,9 +51,9 @@ private val Accept = Color(0xFF2CD987)
 private val Decline = Color(0xFFFF6376)
 
 @Composable
-internal fun CallerPhotoPreview(name: String, photo: String?) {
+internal fun CallerPhotoPreview(name: String, photo: String?, style: CallerPhotoStyle = CallerPhotoStyle()) {
     Box(Modifier.fillMaxSize().clip(RoundedCornerShape(28.dp))) {
-        CallPhotoBackground(photo)
+        CallPhotoBackground(photo, style)
         Column(
             Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 30.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -74,7 +76,7 @@ internal fun CallerPhotoPreview(name: String, photo: String?) {
 }
 
 @Composable
-private fun CallPhotoBackground(photo: String?) {
+private fun CallPhotoBackground(photo: String?, style: CallerPhotoStyle = CallerPhotoStyle()) {
     Box(
         Modifier.fillMaxSize().background(
             Brush.linearGradient(listOf(Color(0xFF071632), Color(0xFF0E3C86), Color(0xFF051329)))
@@ -84,7 +86,12 @@ private fun CallPhotoBackground(photo: String?) {
             AsyncImage(
                 model = photo, contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize().graphicsLayer {
+                    scaleX = style.zoom
+                    scaleY = style.zoom
+                    translationX = size.width * style.horizontal
+                    translationY = size.height * style.vertical
+                }
             )
         } else {
             Canvas(Modifier.fillMaxSize()) {
@@ -102,8 +109,9 @@ private fun CallPhotoBackground(photo: String?) {
             }
         }
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
-            listOf(Color.Black.copy(alpha = 0.34f), Color.Transparent,
-                Color(0xFF030A17).copy(alpha = 0.75f), Color(0xFF020611).copy(alpha = 0.95f))
+            listOf(Color.Black.copy(alpha = (style.dim * 0.7f).coerceAtMost(0.5f)), Color.Transparent,
+                Color(0xFF030A17).copy(alpha = (style.dim + 0.30f).coerceAtMost(0.85f)),
+                Color(0xFF020611).copy(alpha = (style.dim + 0.50f).coerceAtMost(0.94f)))
         )))
     }
 }
@@ -116,6 +124,7 @@ internal fun CallScreen(call: CallSnapshot?, onClose: () -> Unit) {
     val number = call?.number.orEmpty()
     var resolvedName by remember(number) { mutableStateOf("") }
     var resolvedPhoto by remember(number) { mutableStateOf<String?>(store.photoFor(number)) }
+    val photoStyle = remember(number) { store.styleFor(number) }
     LaunchedEffect(number) {
         val contact = withContext(Dispatchers.IO) { repo.findContact(number) }
         resolvedName = contact?.name.orEmpty()
@@ -126,7 +135,7 @@ internal fun CallScreen(call: CallSnapshot?, onClose: () -> Unit) {
     var keypadOpen by remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize().background(BackBlue)) {
-        CallPhotoBackground(resolvedPhoto)
+        CallPhotoBackground(resolvedPhoto, photoStyle)
         Column(
             modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
                 .padding(horizontal = 22.dp),

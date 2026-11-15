@@ -68,7 +68,8 @@ internal fun SwipeContactRow(
     missed: Boolean = false,
     onCall: () -> Unit,
     onMessage: () -> Unit,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onPhoto: (() -> Unit)? = null
 ) {
     var offset by remember(name, number) { mutableFloatStateOf(0f) }
     val animated by animateFloatAsState(offset, label = "Swipe contact")
@@ -130,6 +131,13 @@ internal fun SwipeContactRow(
                 Spacer(Modifier.height(4.dp))
                 Text(subtitle, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            }
+            if (onPhoto != null) {
+                IconButton(onClick = onPhoto, modifier = Modifier.size(38.dp)) {
+                    Icon(Icons.Default.AddPhotoAlternate, "Set caller photo for $name",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(19.dp))
+                }
             }
             IconButton(onClick = onCall, modifier = Modifier.size(42.dp)) {
                 Icon(Icons.Default.Call, "Call $name", tint = primary, modifier = Modifier.size(20.dp))

@@ -172,12 +172,46 @@ internal class PhoneRepository(private val context: Context) {
     }
 }
 
+/** Settings are expressed relative to the preview bounds so they adapt to every screen size. */
+internal data class CallerPhotoStyle(
+    val zoom: Float = 1f,
+    val horizontal: Float = 0f,
+    val vertical: Float = 0f,
+    val dim: Float = 0.34f
+)
+
 internal class PhotoStore(private val context: Context) {
     private val storage = context.getSharedPreferences("caller_photos", Context.MODE_PRIVATE)
-    private fun key(number: String) = "photo:${normalizeNumber(number).takeLast(15)}"
+    private fun id(number: String) = normalizeNumber(number).takeLast(15)
+    private fun key(number: String) = "photo:${id(number)}"
+
     fun photoFor(number: String): String? = storage.getString(key(number), null)
-    fun setPhoto(number: String, uri: Uri) {
-        storage.edit().putString(key(number), uri.toString()).apply()
+
+    fun styleFor(number: String): CallerPhotoStyle {
+        val id = id(number)
+        return CallerPhotoStyle(
+            zoom = storage.getFloat("zoom:$id", 1f).coerceIn(1f, 2.4f),
+            horizontal = storage.getFloat("pan_x:$id", 0f).coerceIn(-0.45f, 0.45f),
+            vertical = storage.getFloat("pan_y:$id", 0f).coerceIn(-0.45f, 0.45f),
+            dim = storage.getFloat("dim:$id", 0.34f).coerceIn(0.14f, 0.64f)
+        )
     }
-    fun removePhoto(number: String) { storage.edit().remove(key(number)).apply() }
+
+    /** Keep existing image URI when only its crop and contrast settings are changed. */
+    fun save(number: String, image: Uri?, style: CallerPhotoStyle) {
+        val id = id(number)
+        storage.edit().apply {
+            if (image != null) putString(key(number), image.toString())
+            putFloat("zoom:$id", style.zoom.coerceIn(1f, 2.4f))
+            putFloat("pan_x:$id", style.horizontal.coerceIn(-0.45f, 0.45f))
+            putFloat("pan_y:$id", style.vertical.coerceIn(-0.45f, 0.45f))
+            putFloat("dim:$id", style.dim.coerceIn(0.14f, 0.64f))
+        }.apply()
+    }
+
+    fun removePhoto(number: String) {
+        val id = id(number)
+        storage.edit().remove(key(number)).remove("zoom:$id")
+            .remove("pan_x:$id").remove("pan_y:$id").remove("dim:$id").apply()
+    }
 }

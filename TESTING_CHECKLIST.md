@@ -20,3 +20,15 @@ Before setting this as an everyday dialer, use a secondary phone and test on the
 - [ ] Emergency calling is **not** tested through this app. Android delegates to the preinstalled phone app.
 
 Build verification in CI is necessary but **does not prove** real-world phone behavior.
+
+## S call v1.1.0: Caller Photo Studio
+
+- [ ] Open Contacts and tap the small photo icon beside a contact.
+- [ ] Choose a gallery image and see it in the live incoming-call preview.
+- [ ] Use pinch and drag to reframe the photo; adjust Zoom and Tone.
+- [ ] Tap Reset and confirm zoom/position/contrast return to defaults.
+- [ ] Tap Back without Save and confirm the previous stored image is unchanged.
+- [ ] Tap Save look and reopen the editor to confirm framing persists.
+- [ ] Place and receive a real call and confirm the custom framing and contrast appear.
+- [ ] Tap Remove photo and confirm the custom photo is cleared.
+- [ ] Test long names, low-light photos, Hindi names, phone with gesture navigation, and screen rotation.

@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.scall.phone.R
+import com.scall.phone.data.CallerPhotoStyle
 import com.scall.phone.data.ContactEntry
 import com.scall.phone.data.PhoneRepository
 import com.scall.phone.data.PhotoStore
@@ -70,6 +71,7 @@ internal fun SCallApp(
     var dialNumber by rememberSaveable { mutableStateOf("") }
     var activeContact by remember { mutableStateOf<ContactEntry?>(null) }
     var photoEditor by remember { mutableStateOf<ContactEntry?>(null) }
+    var newPhoto by remember { mutableStateOf<Uri?>(null) }
     var localRefresh by remember { mutableIntStateOf(0) }
     var contacts by remember { mutableStateOf<List<ContactEntry>>(emptyList()) }
     var recents by remember { mutableStateOf<List<RecentEntry>>(emptyList()) }
@@ -122,17 +124,31 @@ internal fun SCallApp(
     }
 
     val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        if (uri != null) {
+        if (uri != null) newPhoto = uri // Preview first; do not change saved image yet.
+    }
+
+    fun openPhotoEditor(contact: ContactEntry) {
+        newPhoto = null
+        photoEditor = contact
+    }
+
+    fun savePhotoStyle(contact: ContactEntry, style: CallerPhotoStyle) {
+        val picked = newPhoto
+        if (picked != null) {
             try {
                 context.contentResolver.takePersistableUriPermission(
-                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    picked, Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
-                photoEditor?.let { photos.setPhoto(it.number, uri) }
-                localRefresh++
             } catch (_: SecurityException) {
-                Toast.makeText(context, "Could not access this photo", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "This photo cannot be saved. Choose another image.", Toast.LENGTH_LONG).show()
+                return
             }
         }
+        photos.save(contact.number, picked, style)
+        newPhoto = null
+        photoEditor = null
+        localRefresh++
+        Toast.makeText(context, "Caller photo saved", Toast.LENGTH_SHORT).show()
     }
 
     SCallTheme(theme) {
@@ -168,7 +184,7 @@ internal fun SCallApp(
                         title = { Text(if (photoEditor != null) "Caller photo" else "Contact details") },
                         navigationIcon = {
                             IconButton(onClick = {
-                                if (photoEditor != null) photoEditor = null else activeContact = null
+                                if (photoEditor != null) { photoEditor = null; newPhoto = null } else activeContact = null
                             }) { Icon(Icons.Default.ArrowBack, "Back") }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(containerColor = scheme.background)
@@ -218,13 +234,19 @@ internal fun SCallApp(
                 modifier = Modifier.fillMaxSize().padding(padding),
             ) {
                 when {
-                    photoEditor != null -> PhotoEditorScreen(
+                    photoEditor != null -> ProfessionalPhotoEditor(
                         contact = photoEditor!!,
-                        photo = photos.photoFor(photoEditor!!.number) ?: photoEditor!!.photo,
+                        currentPhoto = photos.photoFor(photoEditor!!.number) ?: photoEditor!!.photo,
+                        candidatePhoto = newPhoto?.toString(),
+                        originalStyle = photos.styleFor(photoEditor!!.number),
                         onPick = { pickPhoto.launch(arrayOf("image/*")) },
+                        onSave = { style -> savePhotoStyle(photoEditor!!, style) },
                         onRemove = {
                             photos.removePhoto(photoEditor!!.number)
+                            newPhoto = null
+                            photoEditor = null
                             localRefresh++
+                            Toast.makeText(context, "Custom photo removed", Toast.LENGTH_SHORT).show()
                         }
                     )
                     activeContact != null -> ContactDetailsScreen(
@@ -232,7 +254,7 @@ internal fun SCallApp(
                         photo = photos.photoFor(activeContact!!.number) ?: activeContact!!.photo,
                         onCall = { requestCall(activeContact!!.number) },
                         onMessage = { repository.openSms(activeContact!!.number) },
-                        onEditPhoto = { photoEditor = activeContact }
+                        onEditPhoto = { activeContact?.let(::openPhotoEditor) }
                     )
                     page == "Settings" -> SettingsScreen(
                         theme = theme,
@@ -282,7 +304,8 @@ internal fun SCallApp(
                                 swipesEnabled = enableSwipes,
                                 onCall = ::requestCall,
                                 onMessage = repository::openSms,
-                                onContact = { activeContact = it }
+                                onContact = { activeContact = it },
+                                onPhoto = ::openPhotoEditor
                             )
                             "Favorites" -> ContactsScreen(
                                 contacts = contacts.filter { it.favorite && (query.isBlank() || it.name.contains(query, true) || it.number.contains(query)) },
@@ -291,6 +314,7 @@ internal fun SCallApp(
                                 onCall = ::requestCall,
                                 onMessage = repository::openSms,
                                 onContact = { activeContact = it },
+                                onPhoto = ::openPhotoEditor,
                                 emptyTitle = "No favorites yet"
                             )
                             else -> RecentsScreen(
@@ -380,7 +404,9 @@ internal fun EmptyState(title: String, subtitle: String) {
 private fun ContactsScreen(
     contacts: List<ContactEntry>, photos: PhotoStore, loading: Boolean,
     swipesEnabled: Boolean, onCall: (String) -> Unit, onMessage: (String) -> Unit,
-    onContact: (ContactEntry) -> Unit, emptyTitle: String = "No contacts found"
+    onContact: (ContactEntry) -> Unit,
+    onPhoto: (ContactEntry) -> Unit,
+    emptyTitle: String = "No contacts found"
 ) {
     if (contacts.isEmpty()) {
         EmptyState(if (loading) "Loading contacts…" else emptyTitle,
@@ -396,7 +422,8 @@ private fun ContactsScreen(
                 subtitle = contact.number, swipesEnabled = swipesEnabled,
                 onCall = { onCall(contact.number) },
                 onMessage = { onMessage(contact.number) },
-                onClick = { onContact(contact) }
+                onClick = { onContact(contact) },
+                onPhoto = { onPhoto(contact) }
             )
         }
     }
@@ -589,7 +616,7 @@ private fun SettingsScreen(
             }
         }
         item {
-            Text("S call · v1.0.0\nBeautiful calls. Simple experience.",
+            Text("S call · v1.1.0\nBeautiful calls. Simple experience.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
