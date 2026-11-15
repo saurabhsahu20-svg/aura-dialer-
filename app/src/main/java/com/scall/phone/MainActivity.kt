@@ -85,6 +85,8 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.READ_PHONE_STATE,
             Manifest.permission.CALL_PHONE
         )
+        // Call log editing is only supported while S call owns the default-dialer role.
+        if (repository.isDefaultDialer()) required += Manifest.permission.WRITE_CALL_LOG
         if (Build.VERSION.SDK_INT >= 33) required += Manifest.permission.POST_NOTIFICATIONS
         permissionsLauncher.launch(required.toTypedArray())
     }

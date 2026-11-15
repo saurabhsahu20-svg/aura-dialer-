@@ -25,6 +25,7 @@ internal data class ContactEntry(
 )
 
 internal data class RecentEntry(
+    val id: Long,
     val number: String,
     val name: String,
     val type: Int,
@@ -45,6 +46,7 @@ internal class PhoneRepository(private val context: Context) {
 
     fun hasContactsPermission() = permitted(Manifest.permission.READ_CONTACTS)
     fun hasLogsPermission() = permitted(Manifest.permission.READ_CALL_LOG)
+    fun hasWriteLogsPermission() = permitted(Manifest.permission.WRITE_CALL_LOG)
     fun hasCallPermission() = permitted(Manifest.permission.CALL_PHONE)
 
     fun isDefaultDialer(): Boolean {
@@ -91,26 +93,52 @@ internal class PhoneRepository(private val context: Context) {
         try {
             context.contentResolver.query(
                 CallLog.Calls.CONTENT_URI,
-                arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.CACHED_NAME,
+                arrayOf(CallLog.Calls._ID, CallLog.Calls.NUMBER, CallLog.Calls.CACHED_NAME,
                     CallLog.Calls.TYPE, CallLog.Calls.DATE, CallLog.Calls.DURATION),
                 null, null, "${CallLog.Calls.DATE} DESC"
             )?.use { cursor ->
                 while (cursor.moveToNext() && recent.size < 200) {
-                    val number = cursor.getString(0).orEmpty()
+                    val number = cursor.getString(1).orEmpty()
                     val contact = byNumber[normalizeNumber(number).takeLast(10)]
-                    val cachedName = cursor.getString(1).orEmpty()
+                    val cachedName = cursor.getString(2).orEmpty()
                     recent += RecentEntry(
+                        id = cursor.getLong(0),
                         number = number,
                         name = contact?.name ?: cachedName.ifBlank { number.ifBlank { "Private number" } },
-                        type = cursor.getInt(2),
-                        timestamp = cursor.getLong(3),
-                        duration = cursor.getLong(4),
+                        type = cursor.getInt(3),
+                        timestamp = cursor.getLong(4),
+                        duration = cursor.getLong(5),
                         photo = contact?.photo
                     )
                 }
             }
         } catch (_: SecurityException) { }
         recent
+    }
+
+    /**
+     * Deletes ONLY explicitly selected system call-log row IDs.
+     * Requires the default phone role and restricted WRITE_CALL_LOG permission.
+     * Returns -1 if blocked; never claim success when the system rejects the operation.
+     */
+    suspend fun deleteRecentCalls(ids: Set<Long>): Int = withContext(Dispatchers.IO) {
+        val valid = ids.filter { it > 0 }.distinct().take(200)
+        if (valid.isEmpty()) return@withContext 0
+        if (!isDefaultDialer() || !hasLogsPermission() || !hasWriteLogsPermission()) {
+            return@withContext -1
+        }
+        val where = "${CallLog.Calls._ID} IN (${valid.joinToString(",") { "?" }})"
+        try {
+            context.contentResolver.delete(
+                CallLog.Calls.CONTENT_URI,
+                where,
+                valid.map { it.toString() }.toTypedArray()
+            )
+        } catch (_: SecurityException) {
+            -1
+        } catch (_: Exception) {
+            -1
+        }
     }
 
     suspend fun findContact(number: String): ContactEntry? = withContext(Dispatchers.IO) {
@@ -246,5 +274,35 @@ internal class PhotoStore(private val context: Context) {
         val id = id(number)
         storage.edit().remove(key(number)).remove("zoom:$id")
             .remove("pan_x:$id").remove("pan_y:$id").remove("dim:$id").apply()
+    }
+}
+
+/**
+ * Display-only per-call customization. The phone provider's number, date,
+ * duration and call type remain untouched. Stored only on this device.
+ */
+internal class CallHistoryStore(context: Context) {
+    private val preferences = context.getSharedPreferences("s_call_history_labels", Context.MODE_PRIVATE)
+
+    private fun key(row: RecentEntry): String = "${row.id}:${row.timestamp}"
+    fun title(row: RecentEntry): String? =
+        preferences.getString("title:${key(row)}", null)?.takeIf { it.isNotBlank() }
+    fun note(row: RecentEntry): String =
+        preferences.getString("note:${key(row)}", "").orEmpty()
+
+    fun save(row: RecentEntry, title: String, note: String) {
+        preferences.edit().apply {
+            val cleanTitle = title.trim().take(70)
+            val cleanNote = note.trim().take(250)
+            if (cleanTitle.isBlank()) remove("title:${key(row)}")
+            else putString("title:${key(row)}", cleanTitle)
+            if (cleanNote.isBlank()) remove("note:${key(row)}")
+            else putString("note:${key(row)}", cleanNote)
+        }.apply()
+    }
+
+    fun remove(row: RecentEntry) {
+        preferences.edit().remove("title:${key(row)}")
+            .remove("note:${key(row)}").apply()
     }
 }
