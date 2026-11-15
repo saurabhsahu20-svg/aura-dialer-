@@ -1,8 +1,25 @@
-# S call — Android Dialer (v1.4.0 Call History Manager Preview)
+# S call — Android Dialer (v1.5.0 SIM Setup Preview)
 
 **S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal Material 3 interface and the approved light-green S call launcher icon.
 
 [![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
+
+## 📲 Latest — S call v1.5.0 SIM Setup & Smart Calling
+
+**[Download S call v1.5.0 APK](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.5.0-preview/S-call-v1.5.0-preview.apk)**
+
+**[Open S call v1.5.0 GitHub Release](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.5.0-preview)**
+
+- A visible **SIM & Network** quick-access card on Recents, Contacts, Keypad and Favorites.
+- Shows **SIM 1 / SIM 2** subscriptions, labels, and missing-phone-permission/default-dialer instructions.
+- Refreshes SIM detection when returning from Android Settings.
+- Offers **Ask each time**, **Android default**, or an available, exact Telecom calling account.
+- Tests prevent silently falling back to a different SIM when the chosen line disappears.
+- Preserves mint-green icon, smooth slide-to-call, caller photos and call-history management.
+
+**Android restrictions:** SIM subscriptions are not necessarily exposed as selectable Telecom phone accounts. SMS sending SIM and default mobile-data SIM remain controlled by Android or the messaging app. **This APK is a debug-signed preview for device testing.**
+
+## Previous Release — v1.4.0
 
 ## 📞 Latest — S call v1.4.0 Call History Manager
 
