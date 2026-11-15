@@ -160,7 +160,8 @@ internal class PhoneRepository(private val context: Context) {
 
     /** Real Telecom call-capable accounts; never assume list order equals physical SIM slot. */
     fun availableSimAccounts(): List<SimAccount> {
-        if (!hasPhoneStatePermission()) return emptyList()
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) !=
+            PackageManager.PERMISSION_GRANTED) return emptyList()
         val telecom = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
         return try {
             telecom.callCapablePhoneAccounts.mapIndexed { index, handle ->
@@ -175,7 +176,8 @@ internal class PhoneRepository(private val context: Context) {
 
     /** Active subscriptions are sorted by real SIM slot, unlike Telecom phone accounts. */
     fun availableSmsSubscriptions(): List<SmsSubscription> {
-        if (!permitted(Manifest.permission.READ_PHONE_STATE)) return emptyList()
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) !=
+            PackageManager.PERMISSION_GRANTED) return emptyList()
         return try {
             val manager = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
             manager.activeSubscriptionInfoList.orEmpty().sortedBy { it.simSlotIndex }.map { info ->
