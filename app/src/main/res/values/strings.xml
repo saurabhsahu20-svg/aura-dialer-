@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">S call</string>
+    <string name="incoming_calls_channel">Phone calls</string>
+    <string name="incoming_calls_description">Shows incoming and ongoing phone calls.</string>
+</resources>

@@ -1,0 +1,358 @@
+package com.scall.phone.ui
+
+import android.telecom.Call
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.IntOffset
+import coil.compose.AsyncImage
+import com.scall.phone.data.PhoneRepository
+import com.scall.phone.data.PhotoStore
+import com.scall.phone.telecom.CallBridge
+import com.scall.phone.telecom.CallSnapshot
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
+
+private val BackBlue = Color(0xFF061A41)
+private val Accept = Color(0xFF2CD987)
+private val Decline = Color(0xFFFF6376)
+
+@Composable
+internal fun CallerPhotoPreview(name: String, photo: String?) {
+    Box(Modifier.fillMaxSize().clip(RoundedCornerShape(28.dp))) {
+        CallPhotoBackground(photo)
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 30.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("INCOMING CALL", color = Color.White.copy(alpha = 0.8f),
+                fontSize = 11.sp, letterSpacing = 2.sp)
+            Spacer(Modifier.height(15.dp))
+            Text(name, color = Color.White, fontWeight = FontWeight.Bold,
+                fontSize = 25.sp, textAlign = TextAlign.Center)
+            Spacer(Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(25.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.CallEnd, "Decline", tint = Color.White,
+                    modifier = Modifier.size(40.dp).background(Decline, CircleShape).padding(8.dp))
+                Icon(Icons.Default.Call, "Answer", tint = Color.White,
+                    modifier = Modifier.size(40.dp).background(Accept, CircleShape).padding(8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun CallPhotoBackground(photo: String?) {
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.linearGradient(listOf(Color(0xFF071632), Color(0xFF0E3C86), Color(0xFF051329)))
+        )
+    ) {
+        if (!photo.isNullOrBlank()) {
+            AsyncImage(
+                model = photo, contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Canvas(Modifier.fillMaxSize()) {
+                val center = Offset(size.width * 0.73f, size.height * 0.42f)
+                repeat(4) { index ->
+                    drawCircle(
+                        color = Color(0xFF65BFFF).copy(alpha = 0.10f - index * 0.016f),
+                        radius = size.minDimension * (0.23f + index * 0.14f),
+                        center = center, style = Stroke(width = 4.dp.toPx())
+                    )
+                }
+                drawCircle(Color(0xFF39A4FB).copy(alpha = 0.14f),
+                    radius = size.minDimension * 0.24f,
+                    center = center)
+            }
+        }
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+            listOf(Color.Black.copy(alpha = 0.34f), Color.Transparent,
+                Color(0xFF030A17).copy(alpha = 0.75f), Color(0xFF020611).copy(alpha = 0.95f))
+        )))
+    }
+}
+
+@Composable
+internal fun CallScreen(call: CallSnapshot?, onClose: () -> Unit) {
+    val context = LocalContext.current
+    val store = remember { PhotoStore(context.applicationContext) }
+    val repo = remember { PhoneRepository(context.applicationContext) }
+    val number = call?.number.orEmpty()
+    var resolvedName by remember(number) { mutableStateOf("") }
+    var resolvedPhoto by remember(number) { mutableStateOf<String?>(store.photoFor(number)) }
+    LaunchedEffect(number) {
+        val contact = withContext(Dispatchers.IO) { repo.findContact(number) }
+        resolvedName = contact?.name.orEmpty()
+        resolvedPhoto = store.photoFor(number) ?: contact?.photo
+    }
+    val name = resolvedName.ifBlank { call?.displayName?.ifBlank { number.ifBlank { "Unknown caller" } } ?: "S call" }
+    val incoming = call?.state == Call.STATE_RINGING
+    var keypadOpen by remember { mutableStateOf(false) }
+
+    Box(Modifier.fillMaxSize().background(BackBlue)) {
+        CallPhotoBackground(resolvedPhoto)
+        Column(
+            modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
+                .padding(horizontal = 22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(Modifier.height(34.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(8.dp).background(if (incoming) Accept else Color(0xFF76ACFF), CircleShape))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    when (call?.state) {
+                        Call.STATE_RINGING -> "INCOMING CALL"
+                        Call.STATE_DIALING, Call.STATE_CONNECTING -> "CALLING"
+                        Call.STATE_ACTIVE -> "CONNECTED"
+                        Call.STATE_HOLDING -> "ON HOLD"
+                        else -> "S CALL"
+                    },
+                    color = Color.White.copy(alpha = 0.79f),
+                    fontSize = 11.sp, fontWeight = FontWeight.Medium, letterSpacing = 2.1.sp
+                )
+            }
+            Spacer(Modifier.height(20.dp))
+            Text(name, color = Color.White, fontWeight = FontWeight.Bold,
+                fontSize = 33.sp, textAlign = TextAlign.Center, lineHeight = 39.sp,
+                maxLines = 2)
+            Spacer(Modifier.height(5.dp))
+            Text(number, color = Color.White.copy(alpha = 0.75f), fontSize = 15.sp,
+                textAlign = TextAlign.Center)
+            Spacer(Modifier.height(11.dp))
+            CallTimer(call)
+            Spacer(Modifier.weight(1f))
+            when {
+                incoming -> {
+                    Text("Swipe to answer or decline", color = Color.White.copy(alpha = 0.72f),
+                        fontSize = 13.sp)
+                    Spacer(Modifier.height(23.dp))
+                    IncomingSlideControl(
+                        onAnswer = CallBridge::answer,
+                        onDecline = CallBridge::reject
+                    )
+                    Spacer(Modifier.height(58.dp))
+                }
+                call != null -> {
+                    if (keypadOpen) {
+                        InCallKeypad(onDigit = CallBridge::dtmf)
+                    } else {
+                        ActiveCallControls(
+                            call = call,
+                            onKeypad = { keypadOpen = true }
+                        )
+                    }
+                    Spacer(Modifier.height(24.dp))
+                    FilledIconButton(
+                        onClick = CallBridge::disconnect,
+                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = Decline),
+                        modifier = Modifier.size(72.dp)
+                    ) { Icon(Icons.Default.CallEnd, "End call", Modifier.size(30.dp), tint = Color.White) }
+                    if (keypadOpen) TextButton(onClick = { keypadOpen = false }) {
+                        Text("Close keypad", color = Color.White)
+                    } else Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(25.dp))
+                }
+                else -> {
+                    CircularProgressIndicator(color = Color.White)
+                    Spacer(Modifier.height(12.dp))
+                    Text("Connecting to phone service…", color = Color.White)
+                    Spacer(Modifier.height(20.dp))
+                    TextButton(onClick = onClose) { Text("Close", color = Color.White) }
+                    Spacer(Modifier.height(60.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CallTimer(call: CallSnapshot?) {
+    if (call == null) return
+    if (call.state != Call.STATE_ACTIVE || call.connectedAtMillis <= 0) return
+    var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(call.connectedAtMillis) {
+        while (isActive) {
+            currentTime = System.currentTimeMillis()
+            delay(1000)
+        }
+    }
+    val seconds = ((currentTime - call.connectedAtMillis) / 1000).coerceAtLeast(0)
+    val display = "%02d:%02d".format(seconds / 60, seconds % 60)
+    Text(display, color = Color.White.copy(alpha = 0.92f), fontSize = 15.sp)
+}
+
+@Composable
+private fun IncomingSlideControl(onAnswer: () -> Unit, onDecline: () -> Unit) {
+    var drag by remember { mutableFloatStateOf(0f) }
+    val animated by animateFloatAsState(drag, label = "Answer call slider")
+    val density = LocalDensity.current
+    val threshold = with(density) { 92.dp.toPx() }
+    val maxDrag = with(density) { 115.dp.toPx() }
+    val haptics = LocalHapticFeedback.current
+
+    Box(
+        Modifier.fillMaxWidth().height(90.dp)
+            .clip(RoundedCornerShape(45.dp))
+            .background(Color.White.copy(alpha = 0.16f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                Modifier.width(93.dp).clickable(onClick = onDecline),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(Icons.Default.CallEnd, "Decline", tint = Decline, modifier = Modifier.size(26.dp))
+                Spacer(Modifier.height(3.dp))
+                Text("Decline", fontSize = 11.sp, color = Color.White)
+            }
+            Column(
+                Modifier.width(93.dp).clickable(onClick = onAnswer),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(Icons.Default.Call, "Answer", tint = Accept, modifier = Modifier.size(26.dp))
+                Spacer(Modifier.height(3.dp))
+                Text("Answer", fontSize = 11.sp, color = Color.White)
+            }
+        }
+        Box(
+            Modifier.offset { IntOffset(animated.roundToInt(), 0) }
+                .size(70.dp).clip(CircleShape).background(Color.White)
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragEnd = {
+                            val amount = drag
+                            drag = 0f
+                            if (amount >= threshold) {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onAnswer()
+                            } else if (amount <= -threshold) {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onDecline()
+                            }
+                        },
+                        onDragCancel = { drag = 0f },
+                        onDrag = { change, amount ->
+                            change.consume()
+                            drag = (drag + amount.x).coerceIn(-maxDrag, maxDrag)
+                        }
+                    )
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.Swipe, "Slide to answer or reject", tint = BackBlue,
+                modifier = Modifier.size(30.dp))
+        }
+    }
+}
+
+@Composable
+private fun ActiveCallControls(call: CallSnapshot, onKeypad: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            ControlButton(Icons.Default.MicOff, if (call.isMuted) "Unmute" else "Mute",
+                active = call.isMuted, onClick = CallBridge::toggleMute)
+            ControlButton(Icons.Default.Dialpad, "Keypad", onClick = onKeypad)
+            ControlButton(Icons.Default.VolumeUp, "Speaker", active = call.speakerOn,
+                onClick = CallBridge::toggleSpeaker)
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            ControlButton(Icons.Default.Pause, if (call.state == Call.STATE_HOLDING) "Resume" else "Hold",
+                enabled = call.canHold || call.state == Call.STATE_HOLDING,
+                onClick = CallBridge::holdOrUnhold)
+            ControlButton(Icons.Default.AddCall, "Add call", enabled = call.canAddCall,
+                onClick = CallBridge::addCall)
+            ControlButton(
+                if (call.canMerge) Icons.Default.CallMerge else Icons.Default.Bluetooth,
+                if (call.canMerge) "Merge" else "Bluetooth",
+                enabled = call.canMerge || call.bluetoothAvailable,
+                onClick = if (call.canMerge) CallBridge::merge else CallBridge::selectBluetooth
+            )
+        }
+    }
+}
+
+@Composable
+private fun ControlButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    active: Boolean = false,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    Column(Modifier.width(88.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        FilledTonalIconButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier.size(63.dp),
+            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = if (active) Color(0xFF4285F5) else Color.White.copy(alpha = 0.17f),
+                contentColor = Color.White,
+                disabledContainerColor = Color.White.copy(alpha = 0.07f),
+                disabledContentColor = Color.White.copy(alpha = 0.35f)
+            )
+        ) { Icon(icon, label, Modifier.size(25.dp)) }
+        Spacer(Modifier.height(5.dp))
+        Text(label, color = Color.White.copy(alpha = if (enabled) 0.95f else 0.55f),
+            fontSize = 12.sp, textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+private fun InCallKeypad(onDigit: (Char) -> Unit) {
+    val digits = listOf("1","2","3","4","5","6","7","8","9","*","0","#")
+    Column {
+        repeat(4) { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                repeat(3) { col ->
+                    val digit = digits[row * 3 + col]
+                    Box(
+                        Modifier.size(width = 85.dp, height = 62.dp)
+                            .clickable { onDigit(digit[0]) },
+                        contentAlignment = Alignment.Center
+                    ) { Text(digit, color = Color.White, fontSize = 29.sp) }
+                }
+            }
+        }
+    }
+}
