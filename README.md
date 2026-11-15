@@ -1,8 +1,27 @@
-# S call — Android Dialer (v1.6.1 Verified Download Preview)
+# S call — Android Dialer (v1.7.0 Call Symbols Preview)
 
 **S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal Material 3 interface and the approved light-green S call launcher icon.
 
 [![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
+
+## 🟢🔵🔴 Latest — S call v1.7.0 Incoming / Outgoing / Missed Call Icons
+
+**[⬇️ DOWNLOAD S call v1.7.0 Direct APK](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.0-preview/S-call.apk)**
+
+**[⬇️ DOWNLOAD S call v1.7.0 ZIP Fallback](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.0-preview/S-call-v1.7.0-install-package.zip)**
+
+**[Official S call v1.7.0 GitHub Release](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.7.0-preview)**
+
+- **Green Incoming:** call-received arrow, clear Incoming label and circular avatar badge.
+- **Blue Outgoing:** call-made arrow, clear Outgoing label and badge.
+- **Red Missed:** missed-call arrow, Missed label and highlighted missed entries.
+- **Call History filter chips** for All / Incoming / Outgoing / Missed, each with counts.
+- Cleaner time and connected-duration metadata; personal notes, swipe gestures and history deletion remain available.
+- Accessibility: the symbol and label identify the direction even without the color.
+
+**Build checks:** automated call classification, keypad/navigation tests, APK package/version and ZIP/checksum integrity. **Real-phone calling is still to be tested.** Debug-signed Android preview for testing only.
+
+## Previous release — v1.6.1
 
 ## 📥 Download S call v1.6.1 — Direct APK + ZIP backup
 
