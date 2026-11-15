@@ -1,0 +1,50 @@
+name: Publish S call v1.2 Smart SIM Preview
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/publish-s-call-v12.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish-smart-sim-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release notes
+        uses: actions/checkout@v4
+      - name: Download verified v1.2 APK from successful build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download 43704804958 --repo "$GITHUB_REPOSITORY" --name S-call-debug-apk --dir release-output
+          test -s release-output/app-debug.apk
+          mv release-output/app-debug.apk release-output/S-call-v1.2.0-preview.apk
+          ls -lh release-output/S-call-v1.2.0-preview.apk
+      - name: Create GitHub Preview Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="v1.2.0-preview"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" release-output/S-call-v1.2.0-preview.apk --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$TAG" --notes-file RELEASE_NOTES_v1.2.0.md --prerelease --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" release-output/S-call-v1.2.0-preview.apk \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "S call v1.2.0 — Smart SIM & Smooth Calls Preview" \
+              --target 75e83c4d63dfaf9286e220ef09dae6b1725b7dd9 \
+              --notes-file RELEASE_NOTES_v1.2.0.md \
+              --prerelease
+          fi
+      - name: Verify the public release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view v1.2.0-preview --repo "$GITHUB_REPOSITORY" --json url,isPrerelease,assets
