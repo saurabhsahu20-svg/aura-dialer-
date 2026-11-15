@@ -300,7 +300,7 @@ private fun ActiveCallControls(call: CallSnapshot, onKeypad: () -> Unit) {
             ControlButton(Icons.Default.Pause, if (call.state == Call.STATE_HOLDING) "Resume" else "Hold",
                 enabled = call.canHold || call.state == Call.STATE_HOLDING,
                 onClick = CallBridge::holdOrUnhold)
-            ControlButton(Icons.Default.AddCall, "Add call", enabled = call.canAddCall,
+            ControlButton(Icons.Default.Add, "Add call", enabled = call.canAddCall,
                 onClick = CallBridge::addCall)
             ControlButton(
                 if (call.canMerge) Icons.Default.CallMerge else Icons.Default.Bluetooth,
