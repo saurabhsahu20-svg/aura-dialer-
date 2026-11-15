@@ -1,8 +1,22 @@
-# S call — Android Dialer (v1.6.0 Interactive Keypad Preview)
+# S call — Android Dialer (v1.6.1 Verified Download Preview)
 
 **S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal Material 3 interface and the approved light-green S call launcher icon.
 
 [![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
+
+## 📥 Download S call v1.6.1 — Direct APK + ZIP backup
+
+### **[⬇️ Download S-call.apk — DIRECT ANDROID APP](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.6.1-preview/S-call.apk)**
+
+### **[⬇️ Download ZIP — fallback if APK download fails](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.6.1-preview/S-call-v1.6.1-install-package.zip)**
+
+**[Official GitHub Release](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.6.1-preview)**
+
+This build passes Android unit tests and package/ZIP integrity checks, with the expected S call package and version. If an in-chat file link fails, open the **official GitHub Release** in your mobile browser and tap `S-call.apk` under **Assets**. You can also extract `S-call.apk` from the ZIP fallback. Full instructions are in [INSTALL_S_CALL.txt](INSTALL_S_CALL.txt).
+
+**Important:** This is a debug-signed preview. Its signing certificate may differ from older GitHub Actions builds; installing it over a previous preview could require uninstalling that version, which can remove app-specific settings. Back up data first. Physical phone/calling tests remain outstanding.
+
+## Previous preview — v1.6.0
 
 ## ⌨️ Latest — S call v1.6.0 Interactive Keypad & Smart Back
 

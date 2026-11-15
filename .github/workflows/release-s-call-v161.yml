@@ -1,0 +1,110 @@
+name: Release S call v1.6.1 Verified APK & ZIP
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/release-s-call-v161.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-verify-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+
+      - name: Configure Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Locate Android SDK manager
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_MANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          test -x "$SDK_MANAGER"
+          echo "SDKMANAGER=$SDK_MANAGER" >> "$GITHUB_ENV"
+
+      - name: Install Android SDK 35
+        shell: bash
+        run: |
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Configure Gradle 8.10.2
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Run unit tests
+        run: gradle --no-daemon :app:testDebugUnitTest
+
+      - name: Build S call Android APK
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Verify identity, version, archive and checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-output/package
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk release-output/S-call.apk
+          cp release-output/S-call.apk release-output/package/S-call.apk
+          cp INSTALL_S_CALL.txt release-output/package/INSTALL_S_CALL.txt
+          unzip -t release-output/S-call.apk | tail -n 2
+          BADGING="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging release-output/S-call.apk)"
+          echo "$BADGING" | head -n 3
+          echo "$BADGING" | grep -q "package: name='com.scall.phone'"
+          echo "$BADGING" | grep -q "versionCode='9'"
+          echo "$BADGING" | grep -q "versionName='1.6.1'"
+          (cd release-output/package && sha256sum S-call.apk > SHA256SUMS.txt)
+          (cd release-output/package && zip -q -9 -r ../S-call-v1.6.1-install-package.zip .)
+          unzip -t release-output/S-call-v1.6.1-install-package.zip | tail -n 2
+          (cd release-output/package && sha256sum -c SHA256SUMS.txt)
+          ls -lh release-output/S-call.apk release-output/S-call-v1.6.1-install-package.zip
+
+      - name: Upload verified files as Action artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: S-call-v1.6.1-downloads
+          path: |
+            release-output/S-call.apk
+            release-output/S-call-v1.6.1-install-package.zip
+          if-no-files-found: error
+
+      - name: Publish verified GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG=v1.6.1-preview
+          FILES=(release-output/S-call.apk release-output/S-call-v1.6.1-install-package.zip)
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$TAG" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$TAG" --notes-file RELEASE_NOTES_v1.6.1.md --prerelease --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" "${FILES[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "S call v1.6.1 — Verified APK + ZIP Download" \
+              --notes-file RELEASE_NOTES_v1.6.1.md \
+              --prerelease
+          fi
+
+      - name: Verify downloadable APK and ZIP asset names
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view v1.6.1-preview --repo "$GITHUB_REPOSITORY" --json assets,url,isPrerelease
+          ASSETS="$(gh release view v1.6.1-preview --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          echo "$ASSETS" | grep -q '^S-call.apk$'
+          echo "$ASSETS" | grep -q '^S-call-v1.6.1-install-package.zip$'

@@ -1,0 +1,36 @@
+S CALL v1.6.1 PREVIEW — INSTALL GUIDE
+
+Official download page:
+https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.6.1-preview
+
+DIRECT APK DOWNLOAD:
+https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.6.1-preview/S-call.apk
+
+ZIP FALLBACK:
+https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.6.1-preview/S-call-v1.6.1-install-package.zip
+
+How to download on Android:
+1. Open the official GitHub Release link in Chrome or another browser.
+2. Under Assets, tap "S-call.apk". Wait for your browser download to finish.
+3. Open Files / Downloads on your phone and tap S-call.apk.
+4. Android may ask you to allow installation from your browser or file manager. Only proceed if you trust this APK from your own GitHub repository.
+5. Open S call and grant the required permissions. For in-call features, choose S call as the default Phone app.
+
+If the APK download is blocked:
+1. Try "S-call-v1.6.1-install-package.zip" under Assets.
+2. Open the ZIP in Files, extract it, then use S-call.apk inside it.
+3. The zip includes this install guide and the SHA-256 checksum file.
+
+If you receive "App not installed" or a signature/certificate conflict:
+- Earlier GitHub Actions debug builds may have used a different signing key.
+- To replace an existing preview you may have to uninstall it first.
+- IMPORTANT: Save any app-specific data or caller photo preferences before uninstalling. Uninstalling can erase them.
+- If the error persists, check available storage and Android compatibility.
+
+App package: com.scall.phone
+Version: 1.6.1 (version code 9)
+Android: 8.0 or newer
+Build type: DEBUG-SIGNED PREVIEW
+This is for testing, not a validated Play Store build. Real-device calling, SIM switching, and incoming-call UI still need testing. Keep the phone's built-in dialer available especially for emergency calling.
+
+Never disable Android protection system-wide to install this app. Download only from the repository's official Release page.
