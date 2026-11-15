@@ -1,8 +1,24 @@
-# S call — Android Dialer (v1.7.2 QA-Verified Preview)
+# S call — Android Dialer (v1.7.3 Adaptive Keypad Preview)
 
 **S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal Material 3 interface and the approved light-green S call launcher icon.
 
 [![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
+
+## ⌨️ Latest — S call v1.7.3 Full-height Keypad
+
+**[⬇️ Direct APK Download](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.3-preview/S-call.apk)**
+
+**[📦 ZIP Backup Download](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.3-preview/S-call-v1.7.3-install-package.zip)**
+
+**[Official GitHub v1.7.3 Release](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.7.3-preview)**
+
+- Fixed the large empty space below the dialpad. The 4 rows of number buttons now resize based on screen height.
+- Larger, near-square keys on regular phones; min 72dp touch targets and scrolling on small displays.
+- Call, Message and Backspace remain at the bottom; no changes to SIM preferences or existing call history.
+- Automated unit and Lint checks plus **5/5 emulator UI smoke tests** passed, including a test for excessive keypad-to-call-button spacing.
+- This is a debug-signed testing APK; cellular calls require real-phone verification.
+
+## Previous version — v1.7.2
 
 ## ✅ Latest Release — S call v1.7.2 Quality Tested Preview
 
