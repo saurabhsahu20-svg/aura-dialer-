@@ -1,11 +1,13 @@
 package com.scall.phone.ui
 
 import android.telecom.Call
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,6 +47,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
+import kotlin.math.abs
 
 private val BackBlue = Color(0xFF061A41)
 private val Accept = Color(0xFF2CD987)
@@ -164,19 +167,24 @@ internal fun CallScreen(call: CallSnapshot?, onClose: () -> Unit) {
             Spacer(Modifier.height(5.dp))
             Text(number, color = Color.White.copy(alpha = 0.75f), fontSize = 15.sp,
                 textAlign = TextAlign.Center)
+            if (!call?.accountLabel.isNullOrBlank()) {
+                Spacer(Modifier.height(7.dp))
+                Text("${call?.accountLabel}", color = Color.White.copy(alpha = 0.70f),
+                    fontSize = 12.sp, textAlign = TextAlign.Center)
+            }
             Spacer(Modifier.height(11.dp))
             CallTimer(call)
             Spacer(Modifier.weight(1f))
             when {
                 incoming -> {
-                    Text("Swipe to answer or decline", color = Color.White.copy(alpha = 0.72f),
-                        fontSize = 13.sp)
-                    Spacer(Modifier.height(23.dp))
+                    Text("Swipe the center button  •  or tap an option", color = Color.White.copy(alpha = 0.82f),
+                        fontSize = 12.sp)
+                    Spacer(Modifier.height(19.dp))
                     IncomingSlideControl(
                         onAnswer = CallBridge::answer,
                         onDecline = CallBridge::reject
                     )
-                    Spacer(Modifier.height(58.dp))
+                    Spacer(Modifier.height(65.dp))
                 }
                 call != null -> {
                     if (keypadOpen) {
@@ -230,67 +238,95 @@ private fun CallTimer(call: CallSnapshot?) {
 @Composable
 private fun IncomingSlideControl(onAnswer: () -> Unit, onDecline: () -> Unit) {
     var drag by remember { mutableFloatStateOf(0f) }
-    val animated by animateFloatAsState(drag, label = "Answer call slider")
-    val density = LocalDensity.current
-    val threshold = with(density) { 92.dp.toPx() }
-    val maxDrag = with(density) { 115.dp.toPx() }
+    var dragging by remember { mutableStateOf(false) }
+    var feedbackGiven by remember { mutableStateOf(false) }
+    val answerNow by rememberUpdatedState(onAnswer)
+    val declineNow by rememberUpdatedState(onDecline)
+    val animated by animateFloatAsState(
+        targetValue = drag,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumHigh),
+        label = "Answer decline spring"
+    )
+    val shown = if (dragging) drag else animated
     val haptics = LocalHapticFeedback.current
 
-    Box(
-        Modifier.fillMaxWidth().height(90.dp)
-            .clip(RoundedCornerShape(45.dp))
-            .background(Color.White.copy(alpha = 0.16f)),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(
-                Modifier.width(93.dp).clickable(onClick = onDecline),
-                horizontalAlignment = Alignment.CenterHorizontally
+    BoxWithConstraints(Modifier.fillMaxWidth().height(98.dp)) {
+        val density = LocalDensity.current
+        val maximum = with(density) { ((maxWidth - 78.dp) / 2f).toPx() }.coerceAtLeast(48f)
+        val threshold = maximum * 0.72f
+        val result = chooseSwipeAction(shown, threshold)
+        val shape = RoundedCornerShape(48.dp)
+
+        Box(Modifier.fillMaxSize().clip(shape)
+            .background(Color(0xFF071529).copy(alpha = 0.53f)),
+            contentAlignment = Alignment.Center) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 15.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.CallEnd, "Decline", tint = Decline, modifier = Modifier.size(26.dp))
-                Spacer(Modifier.height(3.dp))
-                Text("Decline", fontSize = 11.sp, color = Color.White)
+                Column(
+                    Modifier.width(88.dp).clickable(onClick = declineNow)
+                        .padding(vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Default.CallEnd, "Decline call", tint = Decline,
+                        modifier = Modifier.size(29.dp))
+                    Spacer(Modifier.height(5.dp))
+                    Text(if (result == SwipeAction.NEGATIVE) "Release" else "Decline",
+                        fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                }
+                Column(
+                    Modifier.width(88.dp).clickable(onClick = answerNow)
+                        .padding(vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Default.Call, "Answer call", tint = Accept,
+                        modifier = Modifier.size(29.dp))
+                    Spacer(Modifier.height(5.dp))
+                    Text(if (result == SwipeAction.POSITIVE) "Release" else "Answer",
+                        fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                }
             }
-            Column(
-                Modifier.width(93.dp).clickable(onClick = onAnswer),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Icon(Icons.Default.Call, "Answer", tint = Accept, modifier = Modifier.size(26.dp))
-                Spacer(Modifier.height(3.dp))
-                Text("Answer", fontSize = 11.sp, color = Color.White)
-            }
-        }
-        Box(
-            Modifier.offset { IntOffset(animated.roundToInt(), 0) }
-                .size(70.dp).clip(CircleShape).background(Color.White)
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragEnd = {
-                            val amount = drag
-                            drag = 0f
-                            if (amount >= threshold) {
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onAnswer()
-                            } else if (amount <= -threshold) {
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onDecline()
+            Box(
+                Modifier.graphicsLayer { translationX = shown }
+                    .size(70.dp)
+                    .clip(CircleShape)
+                    .background(Color.White)
+                    .pointerInput(maximum, threshold) {
+                        detectHorizontalDragGestures(
+                            onDragStart = { dragging = true; feedbackGiven = false },
+                            onDragEnd = {
+                                val action = chooseSwipeAction(drag, threshold)
+                                drag = 0f
+                                dragging = false
+                                feedbackGiven = false
+                                when (action) {
+                                    SwipeAction.POSITIVE -> answerNow()
+                                    SwipeAction.NEGATIVE -> declineNow()
+                                    SwipeAction.NONE -> Unit
+                                }
+                            },
+                            onDragCancel = {
+                                drag = 0f
+                                dragging = false
+                                feedbackGiven = false
+                            },
+                            onHorizontalDrag = { change, amount ->
+                                change.consume()
+                                drag = (drag + amount).coerceIn(-maximum, maximum)
+                                if (abs(drag) >= threshold && !feedbackGiven) {
+                                    feedbackGiven = true
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                }
                             }
-                        },
-                        onDragCancel = { drag = 0f },
-                        onDrag = { change, amount ->
-                            change.consume()
-                            drag = (drag + amount.x).coerceIn(-maxDrag, maxDrag)
-                        }
-                    )
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Default.Swipe, "Slide to answer or reject", tint = BackBlue,
-                modifier = Modifier.size(30.dp))
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Swipe, "Slide left to decline or right to answer",
+                    tint = BackBlue, modifier = Modifier.size(29.dp))
+            }
         }
     }
 }

@@ -1,3 +1,17 @@
+# S call Changelog
+
+## v1.2.0 — Smart SIM selection & swipe refresh (2026-11-15)
+- Add **SIM & network** screen with stored per-line **voice call** preferences: Ask every call or a particular Telecom account.
+- A selected voice line is matched using the precise PhoneAccountHandle, not unreliable SIM list ordering; if unavailable, S call asks again.
+- Improve dual-SIM call chooser and make contact-name swipe right launch the selected SIM route.
+- Add an **SMS SIM suggestion** picker and preferences. SMS is composed in the system messaging app, which controls the actual sending SIM.
+- Show active Android defaults for SMS and Mobile Data, with a shortcut to official Android network settings. A regular dialer cannot change the device's default mobile-data SIM itself.
+- Redesign incoming call slider with finger-following movement, spring reset, threshold haptics and accessible tap-to-answer/decline alternatives.
+- Smooth contact swipe with clear reveal, one-time haptic feedback and deterministic action threshold to reduce accidental calls.
+- Show actual Telecom account label on the call screen when the OS provides it.
+- Keep blue S call icon and minimal themes.
+- This is an **APK preview**: actual SIM routing and calling need tests on real dual-SIM devices.
+
 # S call — Changelog
 
 ## v1.1.0 — Photo Studio Preview

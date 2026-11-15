@@ -11,6 +11,7 @@ import android.provider.CallLog
 import android.provider.ContactsContract
 import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
+import android.telephony.SubscriptionManager
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -32,7 +33,9 @@ internal data class RecentEntry(
     val photo: String?
 )
 
-internal data class SimAccount(val handle: PhoneAccountHandle, val label: String)
+internal data class SimAccount(val handle: PhoneAccountHandle, val label: String) {
+    val key: String get() = SimPreferences.accountKey(handle)
+}
 
 internal fun normalizeNumber(number: String): String = number.filter { it.isDigit() || it == '+' }
 
@@ -126,18 +129,43 @@ internal class PhoneRepository(private val context: Context) {
         } catch (_: SecurityException) { null }
     }
 
+    /** Real Telecom call-capable accounts; never assume list order equals physical SIM slot. */
     fun availableSimAccounts(): List<SimAccount> {
         if (!isDefaultDialer()) return emptyList()
         val telecom = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
         return try {
             telecom.callCapablePhoneAccounts.mapIndexed { index, handle ->
                 val label = try {
-                    telecom.getPhoneAccount(handle)?.label?.toString() ?: "SIM ${index + 1}"
-                } catch (_: SecurityException) { "SIM ${index + 1}" }
+                    telecom.getPhoneAccount(handle)?.label?.toString()?.takeIf { it.isNotBlank() }
+                        ?: "Phone line ${index + 1}"
+                } catch (_: Exception) { "Phone line ${index + 1}" }
                 SimAccount(handle, label)
             }
-        } catch (_: SecurityException) { emptyList() }
+        } catch (_: Exception) { emptyList() }
     }
+
+    /** Active subscriptions are sorted by real SIM slot, unlike Telecom phone accounts. */
+    fun availableSmsSubscriptions(): List<SmsSubscription> {
+        if (!permitted(Manifest.permission.READ_PHONE_STATE)) return emptyList()
+        return try {
+            val manager = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
+            manager.activeSubscriptionInfoList.orEmpty().sortedBy { it.simSlotIndex }.map { info ->
+                val prefix = if (info.simSlotIndex >= 0) "SIM ${info.simSlotIndex + 1}" else "eSIM"
+                val operator = info.displayName?.toString()?.takeIf { it.isNotBlank() }
+                    ?: info.carrierName?.toString().orEmpty()
+                SmsSubscription(info.subscriptionId, info.simSlotIndex,
+                    if (operator.isBlank()) prefix else "$prefix · $operator")
+            }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    fun defaultSmsSubscription(): Int = try {
+        SubscriptionManager.getDefaultSmsSubscriptionId()
+    } catch (_: Exception) { SubscriptionManager.INVALID_SUBSCRIPTION_ID }
+
+    fun defaultDataSubscription(): Int = try {
+        SubscriptionManager.getDefaultDataSubscriptionId()
+    } catch (_: Exception) { SubscriptionManager.INVALID_SUBSCRIPTION_ID }
 
     /** Always use TelecomManager for calls from the default dialer. */
     fun placeCall(number: String, account: PhoneAccountHandle? = null) {
@@ -162,10 +190,15 @@ internal class PhoneRepository(private val context: Context) {
         })
     }
 
-    fun openSms(number: String) {
+    fun openSms(number: String, requestedSubscriptionId: Int? = null) {
         if (number.isBlank()) return
         try {
             context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.fromParts("smsto", number, null)).apply {
+                // Best-effort hint only; the user's messaging app decides which SIM actually sends.
+                if (requestedSubscriptionId != null) {
+                    putExtra("subscription", requestedSubscriptionId)
+                    putExtra("android.telephony.extra.SUBSCRIPTION_ID", requestedSubscriptionId)
+                }
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             })
         } catch (_: Exception) { }

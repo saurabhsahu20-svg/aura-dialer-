@@ -17,7 +17,8 @@ internal data class CallSnapshot(
     val isMuted: Boolean,
     val speakerOn: Boolean,
     val bluetoothAvailable: Boolean,
-    val connectedAtMillis: Long
+    val connectedAtMillis: Long,
+    val accountLabel: String?
 )
 
 /**
@@ -74,6 +75,11 @@ internal object CallBridge {
         val audio = service?.callAudioState
         val earlier = mutable.value
         val connecting = call.state == Call.STATE_ACTIVE
+        val accountLabel = try {
+            val manager = service?.getSystemService(android.content.Context.TELECOM_SERVICE)
+                as? android.telecom.TelecomManager
+            details.accountHandle?.let { manager?.getPhoneAccount(it)?.label?.toString() }
+        } catch (_: Exception) { null }
         mutable.value = CallSnapshot(
             number = details.handle?.schemeSpecificPart.orEmpty(),
             displayName = details.callerDisplayName?.toString().orEmpty(),
@@ -88,7 +94,8 @@ internal object CallBridge {
                 details.connectTimeMillis.takeIf { it > 0 }
                     ?: earlier?.connectedAtMillis?.takeIf { it > 0 }
                     ?: System.currentTimeMillis()
-            } else 0L
+            } else 0L,
+            accountLabel = accountLabel
         )
     }
 

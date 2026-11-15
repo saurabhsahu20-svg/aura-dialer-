@@ -37,6 +37,8 @@ import com.scall.phone.data.PhoneRepository
 import com.scall.phone.data.PhotoStore
 import com.scall.phone.data.RecentEntry
 import com.scall.phone.data.SimAccount
+import com.scall.phone.data.SimPreferences
+import com.scall.phone.data.SmsSubscription
 import com.scall.phone.telecom.CallBridge
 import com.scall.phone.telecom.CallUiActivity
 import com.scall.phone.ui.theme.Blue
@@ -64,6 +66,7 @@ internal fun SCallApp(
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("s_call_settings", android.content.Context.MODE_PRIVATE) }
     val photos = remember { PhotoStore(context.applicationContext) }
+    val simPrefs = remember { SimPreferences(context.applicationContext) }
     var theme by remember { mutableStateOf(prefs.getString("theme", "System") ?: "System") }
     var enableSwipes by remember { mutableStateOf(prefs.getBoolean("swipe_call", true)) }
     var page by rememberSaveable { mutableStateOf("Recents") }
@@ -78,6 +81,8 @@ internal fun SCallApp(
     var isLoading by remember { mutableStateOf(true) }
     var pendingNumber by remember { mutableStateOf<String?>(null) }
     var pendingSims by remember { mutableStateOf<List<SimAccount>>(emptyList()) }
+    var pendingSmsNumber by remember { mutableStateOf<String?>(null) }
+    var pendingSmsSims by remember { mutableStateOf<List<SmsSubscription>>(emptyList()) }
     val currentCall by CallBridge.current.collectAsState()
 
     LaunchedEffect(refreshVersion, localRefresh) {
@@ -117,10 +122,39 @@ internal fun SCallApp(
             return
         }
         val accounts = repository.availableSimAccounts()
-        if (accounts.size > 1) {
-            pendingSims = accounts
-            pendingNumber = number
-        } else dial(number, accounts.firstOrNull()?.handle)
+        // Match the exact Telecom PhoneAccountHandle, never assume SIM 1 == list index 0.
+        val preferred = simPrefs.voiceChoice().takeIf { it != SimPreferences.ASK }
+        val selected = accounts.firstOrNull { it.key == preferred }
+        when {
+            selected != null -> dial(number, selected.handle)
+            accounts.size == 1 -> dial(number, accounts.first().handle)
+            accounts.size > 1 -> { pendingSims = accounts; pendingNumber = number }
+            else -> dial(number) // Let Android choose when it exposes no phone accounts.
+        }
+    }
+
+    fun openMessage(number: String, subscriptionId: Int? = null) {
+        try {
+            repository.openSms(number, subscriptionId)
+            if (subscriptionId != null) {
+                Toast.makeText(context, "Confirm the sending SIM in your Messages app", Toast.LENGTH_LONG).show()
+            }
+        } catch (_: Exception) {
+            Toast.makeText(context, "No messaging app available", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun requestMessage(number: String) {
+        if (number.isBlank()) return
+        val subs = repository.availableSmsSubscriptions()
+        val preference = simPrefs.smsChoice()
+        val selected = subs.firstOrNull { it.key == preference }
+        when {
+            preference == SimPreferences.SYSTEM -> openMessage(number)
+            selected != null -> openMessage(number, selected.subscriptionId)
+            subs.size > 1 -> { pendingSmsSims = subs; pendingSmsNumber = number }
+            else -> openMessage(number, subs.firstOrNull()?.subscriptionId)
+        }
     }
 
     val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -156,18 +190,22 @@ internal fun SCallApp(
         if (pendingNumber != null) {
             AlertDialog(
                 onDismissRequest = { pendingNumber = null },
-                title = { Text("Choose a SIM") },
+                shape = RoundedCornerShape(26.dp),
+                title = { Text("Call using") },
                 text = {
-                    Column {
+                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text("Select a phone line for this call", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                         pendingSims.forEach { sim ->
-                            TextButton(onClick = {
+                            FilledTonalButton(onClick = {
                                 val number = pendingNumber.orEmpty()
                                 pendingNumber = null
                                 dial(number, sim.handle)
-                            }, modifier = Modifier.fillMaxWidth()) {
+                            }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
                                 Icon(Icons.Default.SimCard, null)
-                                Spacer(Modifier.width(10.dp))
-                                Text(sim.label)
+                                Spacer(Modifier.width(12.dp))
+                                Text(sim.label, modifier = Modifier.weight(1f))
+                                Icon(Icons.Default.ChevronRight, null)
                             }
                         }
                     }
@@ -175,16 +213,51 @@ internal fun SCallApp(
                 confirmButton = { TextButton(onClick = { pendingNumber = null }) { Text("Cancel") } }
             )
         }
+        if (pendingSmsNumber != null) {
+            AlertDialog(
+                onDismissRequest = { pendingSmsNumber = null },
+                shape = RoundedCornerShape(26.dp),
+                title = { Text("Message using") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("The messaging app controls the actual SIM. Confirm before sending.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        pendingSmsSims.forEach { sim ->
+                            FilledTonalButton(onClick = {
+                                val number = pendingSmsNumber.orEmpty()
+                                pendingSmsNumber = null
+                                openMessage(number, sim.subscriptionId)
+                            }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
+                                Icon(Icons.Default.SimCard, null)
+                                Spacer(Modifier.width(10.dp))
+                                Text(sim.label, modifier = Modifier.weight(1f))
+                                Icon(Icons.Default.ChevronRight, null)
+                            }
+                        }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { pendingSmsNumber = null }) { Text("Cancel") } }
+            )
+        }
 
         Scaffold(
             containerColor = scheme.background,
             topBar = {
-                if (photoEditor != null || activeContact != null) {
+                if (photoEditor != null || activeContact != null || page == "SIM Manager") {
                     TopAppBar(
-                        title = { Text(if (photoEditor != null) "Caller photo" else "Contact details") },
+                        title = { Text(when {
+                            photoEditor != null -> "Caller photo"
+                            activeContact != null -> "Contact details"
+                            else -> "SIM & network"
+                        }) },
                         navigationIcon = {
                             IconButton(onClick = {
-                                if (photoEditor != null) { photoEditor = null; newPhoto = null } else activeContact = null
+                                when {
+                                    photoEditor != null -> { photoEditor = null; newPhoto = null }
+                                    activeContact != null -> activeContact = null
+                                    else -> page = "Settings"
+                                }
                             }) { Icon(Icons.Default.ArrowBack, "Back") }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(containerColor = scheme.background)
@@ -206,6 +279,9 @@ internal fun SCallApp(
                             IconButton(onClick = { localRefresh++ }) {
                                 Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                             }
+                            IconButton(onClick = { page = "SIM Manager" }) {
+                                Icon(Icons.Default.SimCard, contentDescription = "SIM and network preferences")
+                            }
                             IconButton(onClick = { page = if (page == "Settings") "Recents" else "Settings" }) {
                                 Icon(Icons.Default.Settings, contentDescription = "Settings")
                             }
@@ -215,7 +291,7 @@ internal fun SCallApp(
                 }
             },
             bottomBar = {
-                if (activeContact == null && photoEditor == null && page != "Settings") {
+                if (activeContact == null && photoEditor == null && page != "Settings" && page != "SIM Manager") {
                     NavigationBar(containerColor = scheme.surface, tonalElevation = 1.dp) {
                         tabs.forEach { tab ->
                             NavigationBarItem(
@@ -253,7 +329,7 @@ internal fun SCallApp(
                         contact = activeContact!!,
                         photo = photos.photoFor(activeContact!!.number) ?: activeContact!!.photo,
                         onCall = { requestCall(activeContact!!.number) },
-                        onMessage = { repository.openSms(activeContact!!.number) },
+                        onMessage = { requestMessage(activeContact!!.number) },
                         onEditPhoto = { activeContact?.let(::openPhotoEditor) }
                     )
                     page == "Settings" -> SettingsScreen(
@@ -265,8 +341,10 @@ internal fun SCallApp(
                         contactsGranted = repository.hasContactsPermission(),
                         logsGranted = repository.hasLogsPermission(),
                         requestDialerRole = requestDialerRole,
-                        requestPermissions = requestPermissions
+                        requestPermissions = requestPermissions,
+                        onSimSettings = { page = "SIM Manager" }
                     )
+                    page == "SIM Manager" -> SimSettingsScreen(repository, simPrefs)
                     page == "Keypad" -> KeypadScreen(
                         value = dialNumber,
                         onValueChange = { dialNumber = it },
@@ -303,7 +381,7 @@ internal fun SCallApp(
                                 photos = photos, loading = isLoading,
                                 swipesEnabled = enableSwipes,
                                 onCall = ::requestCall,
-                                onMessage = repository::openSms,
+                                onMessage = ::requestMessage,
                                 onContact = { activeContact = it },
                                 onPhoto = ::openPhotoEditor
                             )
@@ -312,7 +390,7 @@ internal fun SCallApp(
                                 photos = photos, loading = isLoading,
                                 swipesEnabled = enableSwipes,
                                 onCall = ::requestCall,
-                                onMessage = repository::openSms,
+                                onMessage = ::requestMessage,
                                 onContact = { activeContact = it },
                                 onPhoto = ::openPhotoEditor,
                                 emptyTitle = "No favorites yet"
@@ -322,7 +400,7 @@ internal fun SCallApp(
                                 photos = photos, loading = isLoading,
                                 swipesEnabled = enableSwipes,
                                 onCall = ::requestCall,
-                                onMessage = repository::openSms,
+                                onMessage = ::requestMessage,
                                 onDetails = { entry ->
                                     activeContact = contacts.firstOrNull { it.number == entry.number }
                                         ?: ContactEntry(0, entry.name, entry.number, entry.photo, false)
@@ -552,7 +630,8 @@ private fun SettingsScreen(
     theme: String, onThemeChanged: (String) -> Unit,
     swipeEnabled: Boolean, onSwipeEnabledChanged: (Boolean) -> Unit,
     defaultDialer: Boolean, contactsGranted: Boolean, logsGranted: Boolean,
-    requestDialerRole: () -> Unit, requestPermissions: () -> Unit
+    requestDialerRole: () -> Unit, requestPermissions: () -> Unit,
+    onSimSettings: () -> Unit
 ) {
     var themeMenu by remember { mutableStateOf(false) }
     LazyColumn(contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
@@ -594,6 +673,17 @@ private fun SettingsScreen(
         item {
             SettingsCard {
                 ListItem(
+                    leadingContent = { Icon(Icons.Default.SimCard, null) },
+                    headlineContent = { Text("SIM & network preferences") },
+                    supportingContent = { Text("Choose calling line, SMS suggestion & data settings") },
+                    trailingContent = { Icon(Icons.Default.ChevronRight, "Open") },
+                    modifier = Modifier.clickable(onClick = onSimSettings)
+                )
+            }
+        }
+        item {
+            SettingsCard {
+                ListItem(
                     leadingContent = { Icon(Icons.Default.PhoneAndroid, null) },
                     headlineContent = { Text("Default phone application") },
                     supportingContent = { Text(if (defaultDialer) "S call is your default phone app" else "Required for call controls") },
@@ -616,7 +706,7 @@ private fun SettingsScreen(
             }
         }
         item {
-            Text("S call · v1.1.0\nBeautiful calls. Simple experience.",
+            Text("S call · v1.2.0\nBeautiful calls. Simple experience.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,

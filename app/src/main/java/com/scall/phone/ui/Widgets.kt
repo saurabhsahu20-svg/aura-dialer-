@@ -1,6 +1,8 @@
 package com.scall.phone.ui
 
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -21,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -37,6 +40,7 @@ import com.scall.phone.data.ContactEntry
 import com.scall.phone.ui.theme.Blue
 import com.scall.phone.ui.theme.Cyan
 import kotlin.math.roundToInt
+import kotlin.math.abs
 
 @Composable
 internal fun ContactAvatar(name: String, photo: String?, size: Dp = 52.dp) {
@@ -57,7 +61,7 @@ internal fun ContactAvatar(name: String, photo: String?, size: Dp = 52.dp) {
     }
 }
 
-/** Right swipe calls, left swipe messages. A separate call button is always available. */
+/** Gesture follows the finger without animation lag, springs back on release, haptics once. */
 @Composable
 internal fun SwipeContactRow(
     name: String,
@@ -72,49 +76,81 @@ internal fun SwipeContactRow(
     onPhoto: (() -> Unit)? = null
 ) {
     var offset by remember(name, number) { mutableFloatStateOf(0f) }
-    val animated by animateFloatAsState(offset, label = "Swipe contact")
+    var dragging by remember(name, number) { mutableStateOf(false) }
+    var notified by remember(name, number) { mutableStateOf(false) }
+    val callAction by rememberUpdatedState(onCall)
+    val messageAction by rememberUpdatedState(onMessage)
+    val springOffset by animateFloatAsState(
+        targetValue = offset,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumHigh),
+        label = "Contact row spring"
+    )
+    val shown = if (dragging) offset else springOffset
     val density = LocalDensity.current
-    val threshold = with(density) { 86.dp.toPx() }
-    val maximum = with(density) { 116.dp.toPx() }
+    val threshold = with(density) { 100.dp.toPx() }
+    val maximum = with(density) { 138.dp.toPx() }
     val haptics = LocalHapticFeedback.current
+    val reached = abs(shown) >= threshold
     val surface = MaterialTheme.colorScheme.surface
     val primary = MaterialTheme.colorScheme.primary
+    val revealingCall = shown >= 0f
+
     Box(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 3.dp)
-            .clip(RoundedCornerShape(17.dp))
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(20.dp))
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().height(72.dp).background(if (animated > 0) Color(0xFFD9F8E9)
-                else Color(0xFFDFECFF)).padding(horizontal = 22.dp),
+            modifier = Modifier.fillMaxWidth().height(76.dp).background(
+                if (revealingCall) Color(0xFFDEF7E9) else Color(0xFFE2EDFF)
+            ).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = if (animated >= 0) Arrangement.Start else Arrangement.End
+            horizontalArrangement = if (revealingCall) Arrangement.Start else Arrangement.End
         ) {
-            Icon(if (animated >= 0) Icons.Default.Call else Icons.Default.Message,
-                contentDescription = if (animated >= 0) "Slide to call" else "Slide to message",
-                tint = if (animated >= 0) Color(0xFF15995B) else Blue)
+            Icon(if (revealingCall) Icons.Default.Call else Icons.Default.Message,
+                contentDescription = null, tint = if (revealingCall) Color(0xFF087A45) else Blue,
+                modifier = Modifier.size(22.dp))
+            if (abs(shown) >= with(density) { 65.dp.toPx() }) {
+                Spacer(Modifier.width(5.dp))
+                Text(if (reached) "Release" else if (revealingCall) "Call" else "Message",
+                    color = if (revealingCall) Color(0xFF087A45) else Blue,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold)
+            }
         }
         Row(
-            modifier = Modifier.fillMaxWidth().height(72.dp)
-                .graphicsLayer { translationX = animated }
-                .clip(RoundedCornerShape(17.dp))
+            modifier = Modifier.fillMaxWidth().height(76.dp)
+                .graphicsLayer { translationX = shown }
+                .clip(RoundedCornerShape(20.dp))
                 .background(surface)
                 .pointerInput(swipesEnabled, number) {
                     if (swipesEnabled) detectHorizontalDragGestures(
+                        onDragStart = {
+                            dragging = true
+                            notified = false
+                        },
                         onDragEnd = {
-                            val action = offset
+                            val result = chooseSwipeAction(offset, threshold)
+                            dragging = false
                             offset = 0f
-                            if (action > threshold) {
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onCall()
-                            } else if (action < -threshold) {
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onMessage()
+                            notified = false
+                            when (result) {
+                                SwipeAction.POSITIVE -> callAction()
+                                SwipeAction.NEGATIVE -> messageAction()
+                                SwipeAction.NONE -> Unit
                             }
                         },
-                        onDragCancel = { offset = 0f },
+                        onDragCancel = {
+                            dragging = false
+                            offset = 0f
+                            notified = false
+                        },
                         onHorizontalDrag = { change, drag ->
                             change.consume()
                             offset = (offset + drag).coerceIn(-maximum, maximum)
+                            if (abs(offset) >= threshold && !notified) {
+                                notified = true
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
                         }
                     )
                 }
@@ -133,13 +169,13 @@ internal fun SwipeContactRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
             if (onPhoto != null) {
-                IconButton(onClick = onPhoto, modifier = Modifier.size(38.dp)) {
+                IconButton(onClick = onPhoto, modifier = Modifier.size(42.dp)) {
                     Icon(Icons.Default.AddPhotoAlternate, "Set caller photo for $name",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(19.dp))
                 }
             }
-            IconButton(onClick = onCall, modifier = Modifier.size(42.dp)) {
+            IconButton(onClick = onCall, modifier = Modifier.size(46.dp)) {
                 Icon(Icons.Default.Call, "Call $name", tint = primary, modifier = Modifier.size(20.dp))
             }
         }
