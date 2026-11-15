@@ -1,10 +1,21 @@
-# S call — Android Dialer (v1.0 Preview)
+# S call — Android Dialer (v1.1 Photo Studio Preview)
 
 **S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal navy-blue Material 3 interface and the approved blue S call launcher icon.
 
 [![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
 
-## 📲 Download S call v1.0 Preview
+## 📸 NEW — S call v1.1.0 Caller Photo Studio
+
+**[⬇️ Download S call v1.1.0 Android APK](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.1.0-preview/S-call-v1.1.0-preview.apk)**
+
+**[View S call v1.1.0 Photo Studio Release](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.1.0-preview)**
+
+**What's new:** Full-screen caller photo live preview, gallery selection before saving, pinch-to-zoom, drag positioning, customizable gradient tone, Reset and Save look, plus one-tap caller-photo shortcut in Contacts and Favorites. Typography has been refined with Android's lightweight offline sans-serif family.
+
+**Build:** [v1.1.0 GitHub Actions success](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/runs/43689815334). Debug-signed preview APK; physical phone/lock-screen calling tests are still required.
+
+## Previous Preview — S call v1.0
+\n## 📲 Download S call v1.0 Preview
 
 **[Download Android APK (GitHub Release)](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.0.0-preview/app-debug.apk)**
 
@@ -60,7 +71,7 @@ Note: The source bundle does not include the Gradle wrapper JAR. Android Studio 
 
 ## Important caveats
 
-- This is a **first implementation**: it **compiled successfully in GitHub Actions**, but has **not been tested on a physical Android phone**. Verify calling and incoming-call behavior before everyday use.
+- This is a **preview implementation**: it **compiled successfully in GitHub Actions**, but has **not been tested on a physical Android phone**. Verify calling and incoming-call behavior before everyday use.
 - A default dialer cannot promise call recording, online unknown-number identification or full-screen behavior under every OS, permission and carrier combination. These services are **not included** in this build.
 - Photo selection is supported; pinch-to-crop and repositioning editor are future enhancements.
 - Android 14+ may limit full-screen intent activation. Users may need notification/full-screen intent approval; Android chooses when to present heads-up instead of full-screen UI.
@@ -81,4 +92,4 @@ app/src/main/java/com/scall/phone/
 
 ## Project status
 
-Current delivery: **public source code + verified GitHub Actions APK + public GitHub Preview Release**. **Actual-device calling and reliability tests are still pending**.
+Current delivery: **public v1.1 source code + verified v1.1 APK + published GitHub preview release**. **Actual-device calling and reliability tests are still pending**.
