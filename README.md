@@ -1,8 +1,24 @@
-# S call — Android Dialer (v1.3.0 Smooth Slide Preview)
+# S call — Android Dialer (v1.4.0 Call History Manager Preview)
 
-**S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal navy-blue Material 3 interface and the approved blue S call launcher icon.
+**S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal Material 3 interface and the approved light-green S call launcher icon.
 
 [![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
+
+## 📞 Latest — S call v1.4.0 Call History Manager
+
+**[Download S call v1.4.0 Preview APK](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.4.0-preview/S-call-v1.4.0-preview.apk)**
+
+**[View v1.4.0 GitHub Release](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.4.0-preview)**
+
+- **Edit history:** Save an individual call's custom display name and private note locally, without changing real Android call details.
+- **Delete one call:** Each recent call has a Delete control with an irreversible-action confirmation.
+- **Bulk delete:** Select multiple calls or select all filtered entries, then explicitly confirm deletion.
+- **Safe system integration:** Uses exact Android call-log entry IDs and requires the default-phone role plus `WRITE_CALL_LOG`. Reports blocked deletion honestly.
+- **Existing features preserved:** mint-green icon, longer smooth swipe gestures, SIM preferences, photo editor and dark/light themes.
+
+**Note:** This is a debug-signed preview. Physical phone tests remain necessary for call history deletion and in-call behavior.
+
+## Previous release — v1.3.0
 
 ## 🟢 Latest — S call v1.3.0 Longer Swipe & Mint Green Icon
 
