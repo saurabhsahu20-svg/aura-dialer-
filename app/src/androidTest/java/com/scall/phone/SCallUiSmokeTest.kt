@@ -46,7 +46,7 @@ class SCallUiSmokeTest {
     @Test
     fun simSettingsAccessibleWithoutHomeBanner() {
         rule.onNodeWithContentDescription("SIM and network preferences").performClick()
-        rule.onNodeWithText("SIM & network").assertExists()
+        rule.onNodeWithText("Detected SIM cards").assertExists()
         rule.onNodeWithContentDescription("Back").performClick()
         rule.onNodeWithText("Call history").assertExists()
     }
