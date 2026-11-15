@@ -127,9 +127,20 @@ internal fun SCallApp(
         val selected = accounts.firstOrNull { it.key == preferred }
         when {
             selected != null -> dial(number, selected.handle)
+            preferred != null -> {
+                // Never silently use a different SIM if the user's preferred line disappears.
+                if (accounts.isNotEmpty()) {
+                    pendingSims = accounts
+                    pendingNumber = number
+                } else {
+                    Toast.makeText(context, "Preferred calling SIM is unavailable. Check SIM settings.",
+                        Toast.LENGTH_LONG).show()
+                    page = "SIM Manager"
+                }
+            }
             accounts.size == 1 -> dial(number, accounts.first().handle)
             accounts.size > 1 -> { pendingSims = accounts; pendingNumber = number }
-            else -> dial(number) // Let Android choose when it exposes no phone accounts.
+            else -> dial(number) // Let Android decide only when no line was selected.
         }
     }
 
