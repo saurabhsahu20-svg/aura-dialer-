@@ -39,6 +39,8 @@ import com.scall.phone.data.RecentEntry
 import com.scall.phone.data.CallHistoryStore
 import com.scall.phone.data.SimAccount
 import com.scall.phone.data.SimPreferences
+import com.scall.phone.data.chooseCallRoute
+import com.scall.phone.data.CallRoute
 import com.scall.phone.data.SmsSubscription
 import com.scall.phone.telecom.CallBridge
 import com.scall.phone.telecom.CallUiActivity
@@ -128,30 +130,29 @@ internal fun SCallApp(
             requestDialerRole()
             return
         }
-        if (!repository.hasCallPermission()) {
+        if (!repository.hasCallPermission() || !repository.hasPhoneStatePermission()) {
+            Toast.makeText(context, "Allow Phone permission to choose a calling SIM", Toast.LENGTH_LONG).show()
             requestPermissions()
             return
         }
         val accounts = repository.availableSimAccounts()
-        // Match the exact Telecom PhoneAccountHandle, never assume SIM 1 == list index 0.
-        val preferred = simPrefs.voiceChoice().takeIf { it != SimPreferences.ASK }
-        val selected = accounts.firstOrNull { it.key == preferred }
-        when {
-            selected != null -> dial(number, selected.handle)
-            preferred != null -> {
-                // Never silently use a different SIM if the user's preferred line disappears.
-                if (accounts.isNotEmpty()) {
-                    pendingSims = accounts
-                    pendingNumber = number
-                } else {
-                    Toast.makeText(context, "Preferred calling SIM is unavailable. Check SIM settings.",
-                        Toast.LENGTH_LONG).show()
-                    page = "SIM Manager"
-                }
+        val activeSims = repository.availableSmsSubscriptions()
+        val preference = simPrefs.voiceChoice()
+        val selected = accounts.firstOrNull { it.key == preference }
+        // An exact Telecom account handle is required. SIM list ordering is not a safe mapping.
+        when (chooseCallRoute(preference, accounts.map { it.key }, activeSims.size)) {
+            CallRoute.SPECIFIC_ACCOUNT -> dial(number, (selected ?: accounts.single()).handle)
+            CallRoute.ASK_USER -> {
+                pendingSims = accounts
+                pendingNumber = number
             }
-            accounts.size == 1 -> dial(number, accounts.first().handle)
-            accounts.size > 1 -> { pendingSims = accounts; pendingNumber = number }
-            else -> dial(number) // Let Android decide only when no line was selected.
+            CallRoute.ANDROID_DEFAULT -> dial(number)
+            CallRoute.SETUP_REQUIRED -> {
+                Toast.makeText(context,
+                    "SIM selection is unavailable. Check your Phone and SIM settings.",
+                    Toast.LENGTH_LONG).show()
+                page = "SIM Manager"
+            }
         }
     }
 
@@ -457,7 +458,13 @@ internal fun SCallApp(
                         requestPermissions = requestPermissions,
                         onSimSettings = { page = "SIM Manager" }
                     )
-                    page == "SIM Manager" -> SimSettingsScreen(repository, simPrefs)
+                    page == "SIM Manager" -> SimSettingsScreen(
+                        repository = repository,
+                        preferences = simPrefs,
+                        refreshVersion = refreshVersion,
+                        requestDialerRole = requestDialerRole,
+                        requestPermissions = requestPermissions
+                    )
                     page == "Keypad" -> KeypadScreen(
                         value = dialNumber,
                         onValueChange = { dialNumber = it },
@@ -487,6 +494,11 @@ internal fun SCallApp(
                                 onPermission = requestPermissions
                             )
                         }
+                        SimQuickAccess(
+                            repository = repository,
+                            preferences = simPrefs,
+                            onOpen = { page = "SIM Manager" }
+                        )
                         SearchField(value = query, onChange = { query = it })
                         when (page) {
                             "Contacts" -> ContactsScreen(
@@ -547,6 +559,48 @@ internal fun SCallApp(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SimQuickAccess(
+    repository: PhoneRepository,
+    preferences: SimPreferences,
+    onOpen: () -> Unit
+) {
+    val choice = preferences.voiceChoice()
+    val accounts = repository.availableSimAccounts()
+    val selected = when (choice) {
+        SimPreferences.ASK -> "Ask before each call"
+        SimPreferences.SYSTEM -> "Android default SIM"
+        else -> accounts.firstOrNull { it.key == choice }?.label ?: "Selected SIM unavailable"
+    }
+    val subtitle = when {
+        !repository.isDefaultDialer() -> "Choose default phone app to enable calling SIM"
+        !repository.hasPhoneStatePermission() -> "Grant Phone permission to detect SIM cards"
+        else -> "Calls: $selected"
+    }
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.56f),
+        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen)
+                .padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.SimCard, contentDescription = "SIM & Network",
+                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("SIM & Network", fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.titleSmall)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, maxLines = 2,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer)
+            }
+            TextButton(onClick = onOpen) { Text("Choose") }
         }
     }
 }
@@ -907,7 +961,7 @@ private fun SettingsScreen(
                 ListItem(
                     leadingContent = { Icon(Icons.Default.SimCard, null) },
                     headlineContent = { Text("SIM & network preferences") },
-                    supportingContent = { Text("Choose calling line, SMS suggestion & data settings") },
+                    supportingContent = { Text("SIM 1 / SIM 2 · Calls · SMS · Mobile data") },
                     trailingContent = { Icon(Icons.Default.ChevronRight, "Open") },
                     modifier = Modifier.clickable(onClick = onSimSettings)
                 )

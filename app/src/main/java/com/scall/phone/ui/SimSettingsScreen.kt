@@ -20,17 +20,28 @@ import com.scall.phone.data.openMobileNetworkSettings
 
 /** Transparent per-feature SIM configuration: only voice calls can be routed by this dialer. */
 @Composable
-internal fun SimSettingsScreen(repository: PhoneRepository, preferences: SimPreferences) {
+internal fun SimSettingsScreen(
+    repository: PhoneRepository,
+    preferences: SimPreferences,
+    refreshVersion: Int,
+    requestDialerRole: () -> Unit,
+    requestPermissions: () -> Unit
+) {
     val context = LocalContext.current
     var voiceChoice by remember { mutableStateOf(preferences.voiceChoice()) }
     var smsChoice by remember { mutableStateOf(preferences.smsChoice()) }
     var refresh by remember { mutableIntStateOf(0) }
-    val voice = remember(refresh) { repository.availableSimAccounts() }
-    val subscriptions = remember(refresh) { repository.availableSmsSubscriptions() }
-    val dataId = remember(refresh) { repository.defaultDataSubscription() }
-    val smsId = remember(refresh) { repository.defaultSmsSubscription() }
-    val dataLabel = subscriptions.firstOrNull { it.subscriptionId == dataId }?.label ?: "Android system setting"
-    val smsLabel = subscriptions.firstOrNull { it.subscriptionId == smsId }?.label ?: "Ask in Messages / Android default"
+    // Incremented when the app resumes after system permission or SIM settings changes.
+    val isDefault = remember(refresh, refreshVersion) { repository.isDefaultDialer() }
+    val hasPhonePermission = remember(refresh, refreshVersion) { repository.hasPhoneStatePermission() }
+    val voice = remember(refresh, refreshVersion, hasPhonePermission) { repository.availableSimAccounts() }
+    val subscriptions = remember(refresh, refreshVersion, hasPhonePermission) { repository.availableSmsSubscriptions() }
+    val dataId = remember(refresh, refreshVersion) { repository.defaultDataSubscription() }
+    val smsId = remember(refresh, refreshVersion) { repository.defaultSmsSubscription() }
+    val voiceId = remember(refresh, refreshVersion) { repository.defaultVoiceSubscription() }
+    val dataLabel = subscriptions.firstOrNull { it.subscriptionId == dataId }?.label ?: "Android default"
+    val smsLabel = subscriptions.firstOrNull { it.subscriptionId == smsId }?.label ?: "Messaging app / Android default"
+    val voiceLabel = subscriptions.firstOrNull { it.subscriptionId == voiceId }?.label ?: "Android default"
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -50,13 +61,68 @@ internal fun SimSettingsScreen(repository: PhoneRepository, preferences: SimPref
             }
         }
         item {
-            SimSectionCard(Icons.Default.Call, "Voice calls", "Choose a line once or pick before every call") {
+            SimSectionCard(Icons.Default.SimCard, "Detected SIM cards", "Your phone's current SIM information") {
+                Text(
+                    when {
+                        !hasPhonePermission -> "SIM information is hidden until Phone permission is granted."
+                        subscriptions.isEmpty() -> "No active SIM subscriptions are visible to Android."
+                        else -> "${subscriptions.size} active SIM subscription(s) detected"
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                if (!hasPhonePermission) {
+                    Button(onClick = requestPermissions,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp)) {
+                        Icon(Icons.Default.Security, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Allow Phone permission")
+                    }
+                }
+                if (!isDefault) {
+                    FilledTonalButton(onClick = requestDialerRole,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp)) {
+                        Icon(Icons.Default.PhoneAndroid, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Make S call default Phone app")
+                    }
+                }
+                subscriptions.forEach { sim ->
+                    ListItem(
+                        headlineContent = { Text(sim.label) },
+                        supportingContent = { Text(
+                            if (sim.slot >= 0) "Physical SIM slot ${sim.slot + 1}"
+                            else "eSIM / secondary line"
+                        ) },
+                        leadingContent = { Icon(Icons.Default.SimCard, null) }
+                    )
+                }
+                TextButton(
+                    onClick = { context.openMobileNetworkSettings() },
+                    modifier = Modifier.padding(start = 12.dp, bottom = 4.dp)
+                ) {
+                    Icon(Icons.Default.Settings, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Open Android SIM settings")
+                }
+            }
+        }
+        item {
+            SimSectionCard(Icons.Default.Call, "Voice calls",
+                "Android default: $voiceLabel · ${voice.size} selectable line(s)") {
                 SimChoiceRow("Ask each time", "Best for two active SIMs", voiceChoice == SimPreferences.ASK) {
                     voiceChoice = SimPreferences.ASK
                     preferences.setVoiceChoice(voiceChoice)
                 }
+                SimChoiceRow("Use Android default SIM",
+                    "Use the outgoing call SIM chosen in Android settings",
+                    voiceChoice == SimPreferences.SYSTEM) {
+                    voiceChoice = SimPreferences.SYSTEM
+                    preferences.setVoiceChoice(voiceChoice)
+                }
                 if (voice.isEmpty()) {
-                    Text("No calling lines available. Enable S call as the default phone app and allow phone permissions.",
+                    Text("No selectable Telecom call lines were returned. Check your Phone permission and Android SIM settings; choose Android default for system routing.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
@@ -67,7 +133,7 @@ internal fun SimSettingsScreen(repository: PhoneRepository, preferences: SimPref
                         preferences.setVoiceChoice(voiceChoice)
                     }
                 }
-                Text("Stored by phone account, not list position, so SIMs cannot be silently swapped by reordering.",
+                Text("Calling lines are matched by their Android phone-account IDs, never by list order. A SIM shown above is not necessarily a selectable calling account.",
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
             }
@@ -114,7 +180,7 @@ internal fun SimSettingsScreen(repository: PhoneRepository, preferences: SimPref
             }
         }
         item {
-            Text("SIM availability and controls depend on your phone, carrier, and Android version.",
+            Text("If SIMs still do not appear after permission approval, reopen this screen or use Refresh. Available controls depend on phone, carrier, and Android version.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(12.dp))

@@ -48,6 +48,7 @@ internal class PhoneRepository(private val context: Context) {
     fun hasLogsPermission() = permitted(Manifest.permission.READ_CALL_LOG)
     fun hasWriteLogsPermission() = permitted(Manifest.permission.WRITE_CALL_LOG)
     fun hasCallPermission() = permitted(Manifest.permission.CALL_PHONE)
+    fun hasPhoneStatePermission() = permitted(Manifest.permission.READ_PHONE_STATE)
 
     fun isDefaultDialer(): Boolean {
         val manager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
@@ -159,7 +160,7 @@ internal class PhoneRepository(private val context: Context) {
 
     /** Real Telecom call-capable accounts; never assume list order equals physical SIM slot. */
     fun availableSimAccounts(): List<SimAccount> {
-        if (!isDefaultDialer()) return emptyList()
+        if (!hasPhoneStatePermission()) return emptyList()
         val telecom = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
         return try {
             telecom.callCapablePhoneAccounts.mapIndexed { index, handle ->
@@ -186,6 +187,10 @@ internal class PhoneRepository(private val context: Context) {
             }
         } catch (_: Exception) { emptyList() }
     }
+
+    fun defaultVoiceSubscription(): Int = try {
+        SubscriptionManager.getDefaultVoiceSubscriptionId()
+    } catch (_: Exception) { SubscriptionManager.INVALID_SUBSCRIPTION_ID }
 
     fun defaultSmsSubscription(): Int = try {
         SubscriptionManager.getDefaultSmsSubscriptionId()
