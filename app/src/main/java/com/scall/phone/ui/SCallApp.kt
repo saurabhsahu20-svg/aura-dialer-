@@ -545,11 +545,6 @@ internal fun SCallApp(
                                 onPermission = requestPermissions
                             )
                         }
-                        SimQuickAccess(
-                            repository = repository,
-                            preferences = simPrefs,
-                            onOpen = { navigateTo("SIM Manager") }
-                        )
                         SearchField(value = query, onChange = { query = it })
                         when (page) {
                             "Contacts" -> ContactsScreen(
@@ -610,48 +605,6 @@ internal fun SCallApp(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun SimQuickAccess(
-    repository: PhoneRepository,
-    preferences: SimPreferences,
-    onOpen: () -> Unit
-) {
-    val choice = preferences.voiceChoice()
-    val accounts = repository.availableSimAccounts()
-    val selected = when (choice) {
-        SimPreferences.ASK -> "Ask before each call"
-        SimPreferences.SYSTEM -> "Android default SIM"
-        else -> accounts.firstOrNull { it.key == choice }?.label ?: "Selected SIM unavailable"
-    }
-    val subtitle = when {
-        !repository.isDefaultDialer() -> "Choose default phone app to enable calling SIM"
-        !repository.hasPhoneStatePermission() -> "Grant Phone permission to detect SIM cards"
-        else -> "Calls: $selected"
-    }
-    Surface(
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.56f),
-        shape = RoundedCornerShape(18.dp),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen)
-                .padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.SimCard, contentDescription = "SIM & Network",
-                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp))
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("SIM & Network", fontWeight = FontWeight.SemiBold,
-                    style = MaterialTheme.typography.titleSmall)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, maxLines = 2,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer)
-            }
-            TextButton(onClick = onOpen) { Text("Choose") }
         }
     }
 }
@@ -1093,7 +1046,7 @@ private fun SettingsScreen(
             }
         }
         item {
-            Text("S call · v1.7.0\nBeautiful calls. Simple experience.",
+            Text("S call · v1.7.1\nBeautiful calls. Simple experience.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,

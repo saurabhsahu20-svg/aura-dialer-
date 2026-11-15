@@ -1,8 +1,23 @@
-# S call — Android Dialer (v1.7.0 Call Symbols Preview)
+# S call — Android Dialer (v1.7.1 Clean Home Preview)
 
 **S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal Material 3 interface and the approved light-green S call launcher icon.
 
 [![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
+
+## ✅ Latest — S call v1.7.1 Clean Home Screen
+
+**[⬇️ Download S call v1.7.1 APK](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.1-preview/S-call.apk)**
+
+**[📦 ZIP fallback if direct APK fails](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.1-preview/S-call-v1.7.1-install-package.zip)**
+
+**[Official v1.7.1 Release](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.7.1-preview)**
+
+- Removed the purple **SIM & Network** banner from the main pages, making the screen cleaner.
+- All SIM controls remain available through the **top toolbar SIM icon**, **Settings → SIM & Network**, and the Keypad.
+- Preserves call history filters and directional icons, call history editing, the updated keypad, and light-green app icon.
+- Tested by Android CI; preview debug APK, with real-device calling tests still needed.
+
+## Previous release — v1.7.0
 
 ## 🟢🔵🔴 Latest — S call v1.7.0 Incoming / Outgoing / Missed Call Icons
 
