@@ -7,6 +7,7 @@ import android.os.Build
 import android.telecom.PhoneAccountHandle
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -76,6 +77,7 @@ internal fun SCallApp(
     var theme by remember { mutableStateOf(prefs.getString("theme", "System") ?: "System") }
     var enableSwipes by remember { mutableStateOf(prefs.getBoolean("swipe_call", true)) }
     var page by rememberSaveable { mutableStateOf("Recents") }
+    var pageHistory by rememberSaveable { mutableStateOf(listOf<String>()) }
     var query by rememberSaveable { mutableStateOf("") }
     var dialNumber by rememberSaveable { mutableStateOf("") }
     var activeContact by remember { mutableStateOf<ContactEntry?>(null) }
@@ -98,6 +100,43 @@ internal fun SCallApp(
     var pendingSmsSims by remember { mutableStateOf<List<SmsSubscription>>(emptyList()) }
     val currentCall by CallBridge.current.collectAsState()
 
+    fun navigateTo(destination: String) {
+        if (destination == page) return
+        pageHistory = pushPageHistory(pageHistory, page, destination)
+        page = destination
+    }
+
+    fun navigateBack() {
+        when {
+            photoEditor != null -> {
+                photoEditor = null
+                newPhoto = null
+            }
+            activeContact != null -> activeContact = null
+            historySelectionMode -> {
+                historySelectionMode = false
+                selectedHistoryIds = emptySet()
+            }
+            query.isNotBlank() -> query = ""
+            else -> {
+                val (previous, remaining) = popPageHistory(pageHistory)
+                pageHistory = remaining
+                page = previous
+                query = ""
+            }
+        }
+    }
+
+    // Android system Back and gesture navigation mirror the in-app Back arrow.
+    // Only the root Recents page can exit S call; the keypad never closes the app.
+    BackHandler(
+        enabled = photoEditor != null || activeContact != null ||
+            historySelectionMode || query.isNotBlank() ||
+            page != "Recents" || pageHistory.isNotEmpty()
+    ) {
+        navigateBack()
+    }
+
     LaunchedEffect(refreshVersion, localRefresh) {
         isLoading = true
         val newContacts = repository.contacts()
@@ -108,7 +147,7 @@ internal fun SCallApp(
     LaunchedEffect(externalDialNumber) {
         if (externalDialNumber.isNotEmpty()) {
             dialNumber = externalDialNumber
-            page = "Keypad"
+            navigateTo("Keypad")
         }
     }
 
@@ -151,7 +190,7 @@ internal fun SCallApp(
                 Toast.makeText(context,
                     "SIM selection is unavailable. Check your Phone and SIM settings.",
                     Toast.LENGTH_LONG).show()
-                page = "SIM Manager"
+                navigateTo("SIM Manager")
             }
         }
     }
@@ -358,21 +397,18 @@ internal fun SCallApp(
         Scaffold(
             containerColor = scheme.background,
             topBar = {
-                if (photoEditor != null || activeContact != null || page == "SIM Manager") {
+                if (photoEditor != null || activeContact != null || page == "SIM Manager" || page == "Settings") {
                     TopAppBar(
                         title = { Text(when {
                             photoEditor != null -> "Caller photo"
                             activeContact != null -> "Contact details"
-                            else -> "SIM & network"
+                            page == "SIM Manager" -> "SIM & network"
+                            else -> "Settings"
                         }) },
                         navigationIcon = {
-                            IconButton(onClick = {
-                                when {
-                                    photoEditor != null -> { photoEditor = null; newPhoto = null }
-                                    activeContact != null -> activeContact = null
-                                    else -> page = "Settings"
-                                }
-                            }) { Icon(Icons.Default.ArrowBack, "Back") }
+                            IconButton(onClick = { navigateBack() }) {
+                                Icon(Icons.Default.ArrowBack, "Back")
+                            }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(containerColor = scheme.background)
                     )
@@ -393,10 +429,10 @@ internal fun SCallApp(
                             IconButton(onClick = { localRefresh++ }) {
                                 Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                             }
-                            IconButton(onClick = { page = "SIM Manager" }) {
+                            IconButton(onClick = { navigateTo("SIM Manager") }) {
                                 Icon(Icons.Default.SimCard, contentDescription = "SIM and network preferences")
                             }
-                            IconButton(onClick = { page = if (page == "Settings") "Recents" else "Settings" }) {
+                            IconButton(onClick = { navigateTo("Settings") }) {
                                 Icon(Icons.Default.Settings, contentDescription = "Settings")
                             }
                         },
@@ -410,7 +446,7 @@ internal fun SCallApp(
                         tabs.forEach { tab ->
                             NavigationBarItem(
                                 selected = page == tab.label,
-                                onClick = { page = tab.label; query = "" },
+                                onClick = { navigateTo(tab.label); query = "" },
                                 icon = { Icon(tab.icon, contentDescription = tab.label) },
                                 label = { Text(tab.label, fontSize = 11.sp) },
                                 alwaysShowLabel = true
@@ -456,7 +492,7 @@ internal fun SCallApp(
                         logsGranted = repository.hasLogsPermission(),
                         requestDialerRole = requestDialerRole,
                         requestPermissions = requestPermissions,
-                        onSimSettings = { page = "SIM Manager" }
+                        onSimSettings = { navigateTo("SIM Manager") }
                     )
                     page == "SIM Manager" -> SimSettingsScreen(
                         repository = repository,
@@ -465,12 +501,24 @@ internal fun SCallApp(
                         requestDialerRole = requestDialerRole,
                         requestPermissions = requestPermissions
                     )
-                    page == "Keypad" -> KeypadScreen(
-                        value = dialNumber,
-                        onValueChange = { dialNumber = it },
-                        contacts = contacts,
-                        onCall = { requestCall(dialNumber) }
-                    )
+                    page == "Keypad" -> {
+                        val choice = simPrefs.voiceChoice()
+                        val label = when (choice) {
+                            SimPreferences.ASK -> "Ask every time"
+                            SimPreferences.SYSTEM -> "Android default"
+                            else -> repository.availableSimAccounts()
+                                .firstOrNull { it.key == choice }?.label ?: "Line unavailable"
+                        }
+                        KeypadScreen(
+                            value = dialNumber,
+                            onValueChange = { dialNumber = it },
+                            contacts = contacts,
+                            onCall = { requestCall(dialNumber) },
+                            onMessage = { requestMessage(dialNumber) },
+                            onSimSettings = { navigateTo("SIM Manager") },
+                            simLabel = label
+                        )
+                    }
                     else -> {
                         if (currentCall != null) {
                             Surface(
@@ -497,7 +545,7 @@ internal fun SCallApp(
                         SimQuickAccess(
                             repository = repository,
                             preferences = simPrefs,
-                            onOpen = { page = "SIM Manager" }
+                            onOpen = { navigateTo("SIM Manager") }
                         )
                         SearchField(value = query, onChange = { query = it })
                         when (page) {

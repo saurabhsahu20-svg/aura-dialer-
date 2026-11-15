@@ -5,6 +5,12 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -21,6 +27,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
@@ -33,6 +41,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import android.content.Context
+import android.content.ClipboardManager
+import android.widget.Toast
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import coil.compose.AsyncImage
@@ -185,10 +196,10 @@ internal fun SwipeContactRow(
 }
 
 private val keypad = listOf(
-    Triple("1", "", ""), Triple("2", "ABC", ""), Triple("3", "DEF", ""),
-    Triple("4", "GHI", ""), Triple("5", "JKL", ""), Triple("6", "MNO", ""),
-    Triple("7", "PQRS", ""), Triple("8", "TUV", ""), Triple("9", "WXYZ", ""),
-    Triple("*", "", ""), Triple("0", "+", ""), Triple("#", "", "")
+    "1" to "", "2" to "ABC", "3" to "DEF",
+    "4" to "GHI", "5" to "JKL", "6" to "MNO",
+    "7" to "PQRS", "8" to "TUV", "9" to "WXYZ",
+    "*" to "", "0" to "+", "#" to ""
 )
 
 private fun t9(value: String): String = buildString {
@@ -202,106 +213,328 @@ private fun t9(value: String): String = buildString {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun DialKey(
+    digit: String,
+    letters: String,
+    modifier: Modifier = Modifier,
+    onTap: () -> Unit,
+    onLongTap: (() -> Unit)? = null
+) {
+    val touch = remember { MutableInteractionSource() }
+    val pressed by touch.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.91f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "Dial key pressed"
+    )
+    val haptic = LocalHapticFeedback.current
+    val bg = if (pressed) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceContainerHigh
+    val clickDescription = if (digit == "0") "0, long press for plus"
+        else if (letters.isBlank()) digit else "$digit, $letters"
+    Box(
+        modifier = modifier.fillMaxHeight().graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }.clip(RoundedCornerShape(23.dp))
+            .background(bg)
+            .combinedClickable(
+                interactionSource = touch,
+                indication = null,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onTap()
+                },
+                onLongClick = onLongTap?.let { callback ->
+                    {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        callback()
+                    }
+                }
+            )
+            .semantics { contentDescription = clickDescription },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                digit,
+                fontSize = 29.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                letters.ifBlank { " " },
+                fontSize = 10.sp,
+                letterSpacing = 1.5.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/** Responsive tactile keypad; keeps the Call and Backspace actions visible on small screens. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun KeypadScreen(
     value: String,
     onValueChange: (String) -> Unit,
     contacts: List<ContactEntry>,
-    onCall: () -> Unit
+    onCall: () -> Unit,
+    onMessage: () -> Unit,
+    onSimSettings: () -> Unit,
+    simLabel: String
 ) {
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val hasNumber = value.any { it.isDigit() }
     val matches = remember(value, contacts) {
-        if (value.length < 2) emptyList() else contacts.filter {
-            it.number.filter(Char::isDigit).contains(value.filter(Char::isDigit)) || t9(it.name).startsWith(value)
-        }.take(2)
+        val digits = value.filter(Char::isDigit)
+        if (digits.length < 2) emptyList() else contacts.filter {
+            it.number.filter(Char::isDigit).contains(digits) ||
+                t9(it.name).startsWith(digits)
+        }.take(3)
     }
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 26.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 17.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(Modifier.height(10.dp))
-        Text("Keypad", style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
-        Spacer(Modifier.height(18.dp))
-        BasicTextField(
-            value = value,
-            onValueChange = { onValueChange(it.filter { char -> char.isDigit() || char in "+*#(),; -" }) },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp),
-            textStyle = TextStyle(
-                textAlign = TextAlign.Center,
-                fontSize = 30.sp,
-                color = MaterialTheme.colorScheme.onBackground,
-                fontWeight = FontWeight.SemiBold
-            ),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-            singleLine = true,
-            decorationBox = { inner ->
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    if (value.isBlank()) Text("Enter phone number", fontSize = 19.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    inner()
-                }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "Keypad",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            TextButton(onClick = onSimSettings) {
+                Icon(Icons.Default.SimCard, contentDescription = null, Modifier.size(18.dp))
+                Spacer(Modifier.width(5.dp))
+                Text("SIM")
+                Icon(Icons.Default.ChevronRight, null, Modifier.size(16.dp))
             }
-        )
-        Spacer(Modifier.height(6.dp))
-        Column(Modifier.fillMaxWidth().height(70.dp)) {
-            matches.forEach { item ->
+        }
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            shape = RoundedCornerShape(22.dp)
+        ) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp)) {
+                Text(
+                    if (value.isBlank()) "Enter a number" else "Phone number",
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelMedium
+                )
                 Row(
-                    Modifier.fillMaxWidth().clickable { onValueChange(item.number) }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 55.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    ContactAvatar(item.name, item.photo, 24.dp)
-                    Spacer(Modifier.width(10.dp))
-                    Text(item.name, modifier = Modifier.weight(1f), maxLines = 1,
-                        style = MaterialTheme.typography.bodySmall)
-                    Text(item.number, style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(6.dp))
+                    BasicTextField(
+                        value = value,
+                        onValueChange = {},
+                        readOnly = true,
+                        singleLine = true,
+                        modifier = Modifier.weight(1f).semantics {
+                            contentDescription = if (value.isEmpty()) "No number dialed"
+                                else "Dialed phone number $value"
+                        },
+                        textStyle = TextStyle(
+                            fontSize = 29.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            letterSpacing = 0.7.sp
+                        ),
+                        decorationBox = { inner ->
+                            Box(
+                                Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (value.isEmpty()) {
+                                    Text("● ● ●", fontSize = 22.sp,
+                                        color = MaterialTheme.colorScheme.outlineVariant)
+                                }
+                                inner()
+                            }
+                        }
+                    )
+                    TextButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            if (value.isNotBlank()) {
+                                onValueChange("")
+                            } else {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                                    as? ClipboardManager
+                                val clip = clipboard?.primaryClip
+                                val copied = if (clip != null && clip.itemCount > 0) {
+                                    clip.getItemAt(0).coerceToText(context).toString()
+                                } else ""
+                                val pasted = cleanDialNumber(copied)
+                                if (pasted.isNotBlank()) onValueChange(pasted)
+                                else Toast.makeText(context, "No phone number to paste",
+                                    Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    ) { Text(if (value.isNotBlank()) "Clear" else "Paste") }
                 }
             }
         }
-        Spacer(Modifier.weight(1f))
-        for (row in 0 until 4) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                for (col in 0 until 3) {
-                    val item = keypad[row * 3 + col]
-                    Column(
-                        modifier = Modifier.weight(1f).height(74.dp)
-                            .clip(RoundedCornerShape(22.dp))
-                            .clickable { onValueChange(value + item.first) },
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 7.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.Call,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                "Calling SIM: $simLabel",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+                maxLines = 2
+            )
+        }
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+        ) {
+            if (matches.isNotEmpty()) {
+                Text(
+                    "Matching contacts",
+                    modifier = Modifier.padding(start = 9.dp, bottom = 6.dp, top = 6.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                matches.forEach { item ->
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 5.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        shape = RoundedCornerShape(15.dp)
                     ) {
-                        Text(item.first, fontSize = 29.sp, fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface)
-                        Text(item.second, fontSize = 10.sp, letterSpacing = 1.3.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onValueChange(cleanDialNumber(item.number))
+                            }.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            ContactAvatar(item.name, item.photo, 30.dp)
+                            Spacer(Modifier.width(9.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(item.name, style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                Text(item.number, style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                            }
+                            Icon(Icons.Default.ChevronRight, null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
-        }
-        Spacer(Modifier.height(14.dp))
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Spacer(Modifier.weight(1f))
-            Button(
-                onClick = onCall, enabled = value.isNotBlank(),
-                modifier = Modifier.width(160.dp).height(58.dp),
-                shape = RoundedCornerShape(22.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Blue)
-            ) {
-                Icon(Icons.Default.Call, "Call", modifier = Modifier.size(23.dp))
-                Spacer(Modifier.width(10.dp))
-                Text("Call", fontSize = 17.sp, fontWeight = FontWeight.Bold)
-            }
-            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                if (value.isNotBlank()) IconButton(onClick = { onValueChange(value.dropLast(1)) }) {
-                    Icon(Icons.Default.Backspace, "Delete digit", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(7.dp))
+            for (row in 0 until 4) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(75.dp)
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    for (col in 0 until 3) {
+                        val item = keypad[row * 3 + col]
+                        DialKey(
+                            digit = item.first,
+                            letters = item.second,
+                            modifier = Modifier.weight(1f),
+                            onTap = {
+                                onValueChange(appendDialKey(value, item.first))
+                            },
+                            onLongTap = if (item.first == "0") {
+                                { onValueChange(appendDialKey(value, "+")) }
+                            } else null
+                        )
+                    }
                 }
             }
+            Spacer(Modifier.height(6.dp))
         }
-        Spacer(Modifier.height(14.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            FilledTonalIconButton(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onMessage()
+                },
+                enabled = hasNumber,
+                modifier = Modifier.size(58.dp)
+            ) {
+                Icon(Icons.Default.Message, "Message this number", Modifier.size(23.dp))
+            }
+            Button(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onCall()
+                },
+                enabled = hasNumber,
+                modifier = Modifier.weight(1f).height(60.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF118458),
+                    contentColor = Color.White
+                )
+            ) {
+                Icon(Icons.Default.Call, null, Modifier.size(23.dp))
+                Spacer(Modifier.width(9.dp))
+                Text("Call", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            }
+            val deleteTouch = remember { MutableInteractionSource() }
+            val isDeletePressed by deleteTouch.collectIsPressedAsState()
+            val deleteScale by animateFloatAsState(
+                targetValue = if (isDeletePressed) 0.92f else 1f,
+                animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                label = "Backspace press"
+            )
+            Box(
+                modifier = Modifier.size(58.dp).graphicsLayer {
+                    scaleX = deleteScale
+                    scaleY = deleteScale
+                }.clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .combinedClickable(
+                        interactionSource = deleteTouch,
+                        indication = null,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            if (value.isNotEmpty()) onValueChange(value.dropLast(1))
+                        },
+                        onLongClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onValueChange("")
+                        }
+                    ).semantics {
+                        contentDescription = "Delete last digit, long press to clear all"
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Backspace, null, Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
     }
 }
