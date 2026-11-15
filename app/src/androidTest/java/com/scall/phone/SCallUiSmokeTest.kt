@@ -44,6 +44,20 @@ class SCallUiSmokeTest {
     }
 
     @Test
+    fun keypadDoesNotLeaveAnOversizedGapUnderTheDigits() {
+        rule.onNodeWithContentDescription("Keypad", useUnmergedTree = true).performClick()
+        rule.waitForIdle()
+        val lastKeyBottom = rule.onNodeWithContentDescription("#")
+            .fetchSemanticsNode().boundsInRoot.bottom
+        val callTop = rule.onNodeWithText("Call").fetchSemanticsNode().boundsInRoot.top
+        val gapDp = (callTop - lastKeyBottom) / rule.activity.resources.displayMetrics.density
+        org.junit.Assert.assertTrue(
+            "Too much unused space below keypad: ${gapDp}dp",
+            gapDp >= 0f && gapDp < 100f
+        )
+    }
+
+    @Test
     fun simSettingsAccessibleWithoutHomeBanner() {
         rule.onNodeWithContentDescription("SIM and network preferences").performClick()
         rule.onNodeWithText("Detected SIM cards").assertExists()

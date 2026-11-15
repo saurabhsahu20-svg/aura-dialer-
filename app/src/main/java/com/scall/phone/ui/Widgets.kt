@@ -493,11 +493,18 @@ internal fun KeypadScreen(
                 maxLines = 2
             )
         }
-        Column(
+        BoxWithConstraints(
             modifier = Modifier.weight(1f).fillMaxWidth()
-                .verticalScroll(rememberScrollState())
         ) {
-            if (matches.isNotEmpty()) {
+            // Use the available space instead of the old fixed 75dp keypad rows.
+            // On compact screens, retain 72dp touch targets and scroll if needed.
+            val rowHeight = adaptiveDialRowHeight(maxHeight.value, matches.size).dp
+            Column(
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                verticalArrangement = if (matches.isEmpty()) Arrangement.SpaceEvenly
+                    else Arrangement.Top
+            ) {
+                if (matches.isNotEmpty()) {
                 Text(
                     "Matching contacts",
                     modifier = Modifier.padding(start = 9.dp, bottom = 6.dp, top = 6.dp),
@@ -531,13 +538,13 @@ internal fun KeypadScreen(
                     }
                 }
             }
-            Spacer(Modifier.height(7.dp))
-            for (row in 0 until 4) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(75.dp)
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
+                if (matches.isNotEmpty()) Spacer(Modifier.height(7.dp))
+                for (row in 0 until 4) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(rowHeight)
+                            .padding(vertical = 5.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
                     for (col in 0 until 3) {
                         val item = keypad[row * 3 + col]
                         DialKey(
@@ -552,9 +559,9 @@ internal fun KeypadScreen(
                             } else null
                         )
                     }
+                    }
                 }
             }
-            Spacer(Modifier.height(6.dp))
         }
         Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 11.dp),

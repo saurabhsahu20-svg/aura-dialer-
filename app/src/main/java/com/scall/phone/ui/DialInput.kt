@@ -7,3 +7,15 @@ internal fun cleanDialNumber(text: String): String =
 /** On-screen digits, including a long press on zero for plus. */
 internal fun appendDialKey(current: String, key: String): String =
     cleanDialNumber(current + key)
+
+/**
+ * Responsive four-row keypad: fill available phone height with near-square
+ * number keys; preserve at least 72dp high targets on compact displays.
+ * The scrollable key area handles any vertical overflow from contact matches.
+ */
+internal fun adaptiveDialRowHeight(availableHeightDp: Float, suggestionCount: Int): Float {
+    if (!availableHeightDp.isFinite() || availableHeightDp <= 0f) return 72f
+    val matches = suggestionCount.coerceIn(0, 3)
+    val suggestionSpace = if (matches == 0) 0f else 30f + matches * 54f
+    return ((availableHeightDp - suggestionSpace - 12f) / 4f).coerceIn(72f, 136f)
+}

@@ -23,4 +23,27 @@ class DialInputTest {
     @Test fun starAndHashRemainUsable() {
         assertEquals("*123#", cleanDialNumber("*123#"))
     }
+
+    @Test fun keypadExpandsOnTallPhone() {
+        assertEquals(112f, adaptiveDialRowHeight(460f, 0), 0.01f)
+    }
+
+    @Test fun keypadKeepsTapTargetsOnCompactPhone() {
+        assertEquals(72f, adaptiveDialRowHeight(235f, 0), 0.01f)
+    }
+
+    @Test fun keypadReducesRowHeightForContactSuggestions() {
+        val normal = adaptiveDialRowHeight(460f, 0)
+        val withMatches = adaptiveDialRowHeight(460f, 3)
+        org.junit.Assert.assertTrue(withMatches < normal)
+        org.junit.Assert.assertTrue(withMatches >= 72f)
+    }
+
+    @Test fun keypadRespectsHeightLimit() {
+        assertEquals(136f, adaptiveDialRowHeight(2000f, 0), 0.01f)
+    }
+
+    @Test fun invalidHeightStillCreatesUsableButtons() {
+        assertEquals(72f, adaptiveDialRowHeight(Float.NaN, 0), 0.01f)
+    }
 }
