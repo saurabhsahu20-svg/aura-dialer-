@@ -14,7 +14,7 @@
 - **SMS:** Suggest a SIM or ask each time, then check the actual SIM in the messaging app. S call doesn't send SMS itself and cannot force that app to honor the preference.
 - **Mobile data:** View Android's data SIM and open Android network settings to choose another. Standard third-party dialers cannot directly change the system's mobile-data SIM.
 - **Swipe controls:** Smoother touch-following animations, spring-back, thresholds, clearer haptic and visual feedback, and accessible tap alternatives for incoming-call accept/decline.
-- **Accuracy:** Automated threshold unit tests and Android APK build have passed in [GitHub Actions](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/runs/43704804958).
+- **Accuracy:** Automated threshold unit tests and Android APK build have passed in [GitHub Actions](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/runs/43705223431).
 
 **Preview warning:** The APK is debug-signed; incoming calls, SIM routing and lock-screen UI still require testing on a real Android phone.
 
@@ -63,7 +63,7 @@ The APK is **debug-signed**, and is provided for evaluation. **GitHub Actions co
 3. After a successful run, download **S-call-debug-apk** under Artifacts.
 4. The ZIP artifact contains `app-debug.apk`.
 
-A v1.2.0 APK build and swipe unit tests were verified in [this workflow run](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/runs/43704804958).
+A v1.2.0 APK build and swipe unit tests were verified in [this workflow run](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/runs/43705223431).
 
 The source project and the downloadable APK are separate files.
 

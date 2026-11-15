@@ -22,7 +22,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh run download 43704804958 --repo "$GITHUB_REPOSITORY" --name S-call-debug-apk --dir release-output
+          gh run download 43705223431 --repo "$GITHUB_REPOSITORY" --name S-call-debug-apk --dir release-output
           test -s release-output/app-debug.apk
           mv release-output/app-debug.apk release-output/S-call-v1.2.0-preview.apk
           ls -lh release-output/S-call-v1.2.0-preview.apk
