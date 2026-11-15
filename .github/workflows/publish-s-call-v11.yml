@@ -1,0 +1,50 @@
+name: Publish S call v1.1 Photo Studio preview
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/publish-s-call-v11.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish-photo-studio-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release notes
+        uses: actions/checkout@v4
+      - name: Download verified v1.1 debug APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download 43689815334 --repo "$GITHUB_REPOSITORY" --name S-call-debug-apk --dir release-output
+          test -s release-output/app-debug.apk
+          mv release-output/app-debug.apk release-output/S-call-v1.1.0-preview.apk
+          ls -lh release-output/S-call-v1.1.0-preview.apk
+      - name: Publish GitHub preview release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="v1.1.0-preview"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" release-output/S-call-v1.1.0-preview.apk --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$TAG" --notes-file RELEASE_NOTES_v1.1.0.md --prerelease --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" release-output/S-call-v1.1.0-preview.apk \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "S call v1.1.0 — Caller Photo Studio Preview" \
+              --target 9a35f6b435ff92ede6ada054c39bfd9218eaedc7 \
+              --notes-file RELEASE_NOTES_v1.1.0.md \
+              --prerelease
+          fi
+      - name: Verify published preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view v1.1.0-preview --repo "$GITHUB_REPOSITORY" --json url,isPrerelease,assets
