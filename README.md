@@ -1,8 +1,20 @@
-# S call — Android Dialer (v1.2 Smart SIM & Smooth Calls Preview)
+# S call — Android Dialer (v1.2.1 Smart SIM Preview)
 
 **S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal navy-blue Material 3 interface and the approved blue S call launcher icon.
 
 [![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
+
+## ✅ Latest Download — S call v1.2.1 Preview
+
+**[Download latest S call v1.2.1 APK](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.2.1-preview/S-call-v1.2.1-preview.apk)**
+
+**[GitHub v1.2.1 Release and installation notes](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.2.1-preview)**
+
+This version retains smooth call-answer and swipe-to-call gestures, SIM 1 / SIM 2 preference, and adds a safeguard: **if the preferred calling SIM becomes unavailable, the app does not silently place calls on another SIM**. Android still controls the real mobile-data SIM and the messaging application controls the actual SMS SIM.
+
+Built with GitHub Actions (JDK 17, Android SDK 35, Gradle 8.10.2) with automated gesture unit tests. Preview APK is debug-signed; real-device testing remains required.
+
+## Previous Preview — v1.2.0
 
 ## ✨ NEW — S call v1.2.0 Smart SIM & Smooth Calling
 
