@@ -36,6 +36,7 @@ import com.scall.phone.data.ContactEntry
 import com.scall.phone.data.PhoneRepository
 import com.scall.phone.data.PhotoStore
 import com.scall.phone.data.RecentEntry
+import com.scall.phone.data.CallHistoryStore
 import com.scall.phone.data.SimAccount
 import com.scall.phone.data.SimPreferences
 import com.scall.phone.data.SmsSubscription
@@ -44,6 +45,7 @@ import com.scall.phone.telecom.CallUiActivity
 import com.scall.phone.ui.theme.Blue
 import com.scall.phone.ui.theme.SCallTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private data class NavTab(val label: String, val icon: ImageVector)
@@ -67,6 +69,8 @@ internal fun SCallApp(
     val prefs = remember { context.getSharedPreferences("s_call_settings", android.content.Context.MODE_PRIVATE) }
     val photos = remember { PhotoStore(context.applicationContext) }
     val simPrefs = remember { SimPreferences(context.applicationContext) }
+    val historyStore = remember { CallHistoryStore(context.applicationContext) }
+    val actionScope = rememberCoroutineScope()
     var theme by remember { mutableStateOf(prefs.getString("theme", "System") ?: "System") }
     var enableSwipes by remember { mutableStateOf(prefs.getBoolean("swipe_call", true)) }
     var page by rememberSaveable { mutableStateOf("Recents") }
@@ -78,6 +82,13 @@ internal fun SCallApp(
     var localRefresh by remember { mutableIntStateOf(0) }
     var contacts by remember { mutableStateOf<List<ContactEntry>>(emptyList()) }
     var recents by remember { mutableStateOf<List<RecentEntry>>(emptyList()) }
+    var editingHistory by remember { mutableStateOf<RecentEntry?>(null) }
+    var historyTitle by rememberSaveable { mutableStateOf("") }
+    var historyNote by rememberSaveable { mutableStateOf("") }
+    var historySelectionMode by remember { mutableStateOf(false) }
+    var selectedHistoryIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var pendingHistoryDeletion by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var isDeletingHistory by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
     var pendingNumber by remember { mutableStateOf<String?>(null) }
     var pendingSims by remember { mutableStateOf<List<SimAccount>>(emptyList()) }
@@ -252,6 +263,97 @@ internal fun SCallApp(
             )
         }
 
+
+        if (editingHistory != null) {
+            val row = editingHistory!!
+            AlertDialog(
+                onDismissRequest = { editingHistory = null },
+                title = { Text("Edit call history") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Only this entry's display name and private note will change in S call.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        OutlinedTextField(
+                            value = historyTitle,
+                            onValueChange = { historyTitle = it.take(70) },
+                            label = { Text("Display name (optional)") },
+                            placeholder = { Text(row.name) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = historyNote,
+                            onValueChange = { historyNote = it.take(250) },
+                            label = { Text("Personal note (optional)") },
+                            minLines = 2, maxLines = 4,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text("Original number, date, call type and duration stay unchanged.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        historyStore.save(row, historyTitle, historyNote)
+                        editingHistory = null
+                        localRefresh++
+                    }) { Text("Save") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { editingHistory = null }) { Text("Cancel") }
+                }
+            )
+        }
+        if (pendingHistoryDeletion.isNotEmpty()) {
+            val count = pendingHistoryDeletion.size
+            AlertDialog(
+                onDismissRequest = { if (!isDeletingHistory) pendingHistoryDeletion = emptySet() },
+                icon = { Icon(Icons.Default.DeleteForever, null, tint = MaterialTheme.colorScheme.error) },
+                title = { Text(if (count == 1) "Delete this call?" else "Delete $count calls?") },
+                text = { Text(
+                    "This permanently removes the selected records from Android call history. " +
+                        "Other phone apps may also stop showing them. This cannot be undone."
+                ) },
+                confirmButton = {
+                    Button(
+                        enabled = !isDeletingHistory,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        onClick = {
+                            if (isDeletingHistory) return@Button
+                            isDeletingHistory = true
+                            val ids = pendingHistoryDeletion
+                            actionScope.launch {
+                                val deleted = repository.deleteRecentCalls(ids)
+                                isDeletingHistory = false
+                                pendingHistoryDeletion = emptySet()
+                                if (deleted >= 0) {
+                                    recents.filter { it.id in ids }.forEach(historyStore::remove)
+                                    selectedHistoryIds = emptySet()
+                                    historySelectionMode = false
+                                    localRefresh++
+                                    Toast.makeText(context,
+                                        if (deleted == 0) "No matching calls to delete" else "Deleted $deleted call(s)",
+                                        Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context,
+                                        "Delete blocked. Set S call as default phone app and allow Call log access.",
+                                        Toast.LENGTH_LONG).show()
+                                    if (!repository.isDefaultDialer()) requestDialerRole() else requestPermissions()
+                                }
+                            }
+                        }
+                    ) { Text(if (isDeletingHistory) "Deleting…" else "Delete permanently") }
+                },
+                dismissButton = {
+                    TextButton(enabled = !isDeletingHistory, onClick = {
+                        pendingHistoryDeletion = emptySet()
+                    }) { Text("Cancel") }
+                }
+            )
+        }
+
         Scaffold(
             containerColor = scheme.background,
             topBar = {
@@ -407,9 +509,33 @@ internal fun SCallApp(
                                 emptyTitle = "No favorites yet"
                             )
                             else -> RecentsScreen(
-                                calls = recents.filter { query.isBlank() || it.name.contains(query, true) || it.number.contains(query) },
-                                photos = photos, loading = isLoading,
+                                calls = recents.filter { query.isBlank() ||
+                                    it.name.contains(query, true) || it.number.contains(query) ||
+                                    (historyStore.title(it)?.contains(query, true) == true) ||
+                                    historyStore.note(it).contains(query, true) },
+                                photos = photos, historyStore = historyStore, loading = isLoading,
                                 swipesEnabled = enableSwipes,
+                                selectionMode = historySelectionMode,
+                                selectedIds = selectedHistoryIds,
+                                onSelectionModeChange = {
+                                    historySelectionMode = it
+                                    if (!it) selectedHistoryIds = emptySet()
+                                },
+                                onToggleSelected = { row ->
+                                    selectedHistoryIds = if (row.id in selectedHistoryIds) {
+                                        selectedHistoryIds - row.id
+                                    } else selectedHistoryIds + row.id
+                                },
+                                onSelectAll = { visible ->
+                                    selectedHistoryIds = visible.map { it.id }.toSet()
+                                },
+                                onDeleteSelected = { pendingHistoryDeletion = selectedHistoryIds },
+                                onEdit = { entry ->
+                                    editingHistory = entry
+                                    historyTitle = historyStore.title(entry).orEmpty()
+                                    historyNote = historyStore.note(entry)
+                                },
+                                onDeleteOne = { pendingHistoryDeletion = setOf(it.id) },
                                 onCall = ::requestCall,
                                 onMessage = ::requestMessage,
                                 onDetails = { entry ->
@@ -520,37 +646,132 @@ private fun ContactsScreen(
 
 @Composable
 private fun RecentsScreen(
-    calls: List<RecentEntry>, photos: PhotoStore, loading: Boolean,
-    swipesEnabled: Boolean, onCall: (String) -> Unit, onMessage: (String) -> Unit,
+    calls: List<RecentEntry>,
+    photos: PhotoStore,
+    historyStore: CallHistoryStore,
+    loading: Boolean,
+    swipesEnabled: Boolean,
+    selectionMode: Boolean,
+    selectedIds: Set<Long>,
+    onSelectionModeChange: (Boolean) -> Unit,
+    onToggleSelected: (RecentEntry) -> Unit,
+    onSelectAll: (List<RecentEntry>) -> Unit,
+    onDeleteSelected: () -> Unit,
+    onEdit: (RecentEntry) -> Unit,
+    onDeleteOne: (RecentEntry) -> Unit,
+    onCall: (String) -> Unit,
+    onMessage: (String) -> Unit,
     onDetails: (RecentEntry) -> Unit
 ) {
-    if (calls.isEmpty()) {
-        EmptyState(if (loading) "Loading calls…" else "No recent calls", "Your recent calls will appear here.")
-        return
-    }
-    LazyColumn(contentPadding = PaddingValues(bottom = 22.dp)) {
-        item { SectionHeading("Recent calls", "${calls.size} entries") }
-        items(calls, key = { "${it.timestamp}:${it.number}:${it.type}" }) { item ->
+    LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+        item {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 7.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Call history", style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold)
+                    Text("${calls.size} recent calls",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelMedium)
+                }
+                TextButton(onClick = { onSelectionModeChange(!selectionMode) }) {
+                    Icon(if (selectionMode) Icons.Default.Close else Icons.Default.Checklist, null,
+                        modifier = Modifier.size(19.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text(if (selectionMode) "Cancel" else "Select")
+                }
+            }
+        }
+        if (selectionMode) {
+            item {
+                Surface(color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(17.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("${selectedIds.size} selected", modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelLarge)
+                        TextButton(onClick = { onSelectAll(calls) }, enabled = calls.isNotEmpty()) {
+                            Text("Select all")
+                        }
+                        Button(onClick = onDeleteSelected, enabled = selectedIds.isNotEmpty(),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) {
+                            Text("Delete")
+                        }
+                    }
+                }
+            }
+        }
+        if (calls.isEmpty()) {
+            item {
+                EmptyState(
+                    if (loading) "Loading calls…" else "No recent calls",
+                    "Your recent calls will appear here."
+                )
+            }
+        }
+        items(calls, key = { it.id }) { item ->
             val direction = when (item.type) {
-                android.provider.CallLog.Calls.MISSED_TYPE -> "Missed · "
-                android.provider.CallLog.Calls.OUTGOING_TYPE -> "Outgoing · "
-                android.provider.CallLog.Calls.INCOMING_TYPE -> "Incoming · "
-                else -> "Call · "
+                android.provider.CallLog.Calls.MISSED_TYPE -> "Missed"
+                android.provider.CallLog.Calls.OUTGOING_TYPE -> "Outgoing"
+                android.provider.CallLog.Calls.INCOMING_TYPE -> "Incoming"
+                else -> "Call"
             }
             val time = remember(item.timestamp) {
                 java.text.SimpleDateFormat("dd MMM, h:mm a", java.util.Locale.getDefault())
                     .format(java.util.Date(item.timestamp))
             }
-            SwipeContactRow(
-                name = item.name, number = item.number,
-                photoUri = photos.photoFor(item.number) ?: item.photo,
-                subtitle = direction + time,
-                missed = item.type == android.provider.CallLog.Calls.MISSED_TYPE,
-                swipesEnabled = swipesEnabled,
-                onCall = { onCall(item.number) },
-                onMessage = { onMessage(item.number) },
-                onClick = { onDetails(item) }
-            )
+            val note = historyStore.note(item)
+            Column {
+                SwipeContactRow(
+                    name = historyStore.title(item) ?: item.name,
+                    number = item.number,
+                    photoUri = photos.photoFor(item.number) ?: item.photo,
+                    subtitle = "$direction · $time" +
+                        if (note.isBlank()) "" else " · ${note.take(38)}",
+                    missed = item.type == android.provider.CallLog.Calls.MISSED_TYPE,
+                    swipesEnabled = swipesEnabled && !selectionMode,
+                    onCall = { onCall(item.number) },
+                    onMessage = { onMessage(item.number) },
+                    onClick = {
+                        if (selectionMode) onToggleSelected(item) else onDetails(item)
+                    }
+                )
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 22.dp, end = 18.dp, bottom = 7.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (selectionMode) {
+                        Checkbox(checked = item.id in selectedIds,
+                            onCheckedChange = { onToggleSelected(item) })
+                        Text("Select", style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.weight(1f))
+                    } else {
+                        Spacer(Modifier.weight(1f))
+                    }
+                    TextButton(onClick = { onEdit(item) }) {
+                        Icon(Icons.Default.Edit, null, Modifier.size(17.dp))
+                        Spacer(Modifier.width(3.dp))
+                        Text("Edit")
+                    }
+                    TextButton(onClick = { onDeleteOne(item) }) {
+                        Icon(Icons.Default.DeleteOutline, null, Modifier.size(17.dp),
+                            tint = MaterialTheme.colorScheme.error)
+                        Spacer(Modifier.width(3.dp))
+                        Text("Delete", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f),
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+            }
         }
     }
 }
