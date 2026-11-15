@@ -1,8 +1,24 @@
-# S call — Android Dialer (v1.1 Photo Studio Preview)
+# S call — Android Dialer (v1.2 Smart SIM & Smooth Calls Preview)
 
 **S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal navy-blue Material 3 interface and the approved blue S call launcher icon.
 
 [![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
+
+## ✨ NEW — S call v1.2.0 Smart SIM & Smooth Calling
+
+**[⬇️ Download S call v1.2.0 APK](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.2.0-preview/S-call-v1.2.0-preview.apk)**
+
+**[View S call v1.2.0 Preview Release](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.2.0-preview)**
+
+- **Calls:** Pick a particular Telecom phone account, or ask before each call. Applies to the keypad, call shortcut and contact-name swipe; if the selected line is unavailable, the app asks again rather than silently using the other line.
+- **SMS:** Suggest a SIM or ask each time, then check the actual SIM in the messaging app. S call doesn't send SMS itself and cannot force that app to honor the preference.
+- **Mobile data:** View Android's data SIM and open Android network settings to choose another. Standard third-party dialers cannot directly change the system's mobile-data SIM.
+- **Swipe controls:** Smoother touch-following animations, spring-back, thresholds, clearer haptic and visual feedback, and accessible tap alternatives for incoming-call accept/decline.
+- **Accuracy:** Automated threshold unit tests and Android APK build have passed in [GitHub Actions](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/runs/43704804958).
+
+**Preview warning:** The APK is debug-signed; incoming calls, SIM routing and lock-screen UI still require testing on a real Android phone.
+
+## Previous Preview — S call v1.1
 
 ## 📸 NEW — S call v1.1.0 Caller Photo Studio
 
@@ -15,7 +31,8 @@
 **Build:** [v1.1.0 GitHub Actions success](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/runs/43689815334). Debug-signed preview APK; physical phone/lock-screen calling tests are still required.
 
 ## Previous Preview — S call v1.0
-\n## 📲 Download S call v1.0 Preview
+
+## 📲 Download S call v1.0 Preview
 
 **[Download Android APK (GitHub Release)](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.0.0-preview/app-debug.apk)**
 
@@ -46,7 +63,7 @@ The APK is **debug-signed**, and is provided for evaluation. **GitHub Actions co
 3. After a successful run, download **S-call-debug-apk** under Artifacts.
 4. The ZIP artifact contains `app-debug.apk`.
 
-A successful APK build has already been verified in [this workflow run](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/runs/43687891267).
+A v1.2.0 APK build and swipe unit tests were verified in [this workflow run](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/runs/43704804958).
 
 The source project and the downloadable APK are separate files.
 
@@ -92,4 +109,4 @@ app/src/main/java/com/scall/phone/
 
 ## Project status
 
-Current delivery: **public v1.1 source code + verified v1.1 APK + published GitHub preview release**. **Actual-device calling and reliability tests are still pending**.
+Current delivery: **public v1.2 source code + verified APK + published GitHub preview release**. **Actual-device calling and reliability tests are still pending**.
