@@ -82,23 +82,25 @@ internal fun SwipeContactRow(
     val messageAction by rememberUpdatedState(onMessage)
     val springOffset by animateFloatAsState(
         targetValue = offset,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
         label = "Contact row spring"
     )
     val shown = if (dragging) offset else springOffset
     val density = LocalDensity.current
-    val threshold = with(density) { 100.dp.toPx() }
-    val maximum = with(density) { 138.dp.toPx() }
     val haptics = LocalHapticFeedback.current
-    val reached = abs(shown) >= threshold
     val surface = MaterialTheme.colorScheme.surface
     val primary = MaterialTheme.colorScheme.primary
     val revealingCall = shown >= 0f
 
-    Box(
+    BoxWithConstraints(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
             .clip(RoundedCornerShape(20.dp))
     ) {
+        // Track geometry follows screen width: a short flick can never place a call.
+        val rowTravel = with(density) { maxWidth.toPx() }.coerceAtLeast(1f)
+        val threshold = requiredSlideDistance(rowTravel, CONTACT_SLIDE_FRACTION)
+        val maximum = rowTravel * 0.86f
+        val reached = abs(shown) >= threshold
         Row(
             modifier = Modifier.fillMaxWidth().height(76.dp).background(
                 if (revealingCall) Color(0xFFDEF7E9) else Color(0xFFE2EDFF)
@@ -109,9 +111,9 @@ internal fun SwipeContactRow(
             Icon(if (revealingCall) Icons.Default.Call else Icons.Default.Message,
                 contentDescription = null, tint = if (revealingCall) Color(0xFF087A45) else Blue,
                 modifier = Modifier.size(22.dp))
-            if (abs(shown) >= with(density) { 65.dp.toPx() }) {
+            if (abs(shown) >= rowTravel * 0.15f) {
                 Spacer(Modifier.width(5.dp))
-                Text(if (reached) "Release" else if (revealingCall) "Call" else "Message",
+                Text(if (reached) "Release now" else "Slide 68%",
                     color = if (revealingCall) Color(0xFF087A45) else Blue,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.SemiBold)
@@ -122,7 +124,7 @@ internal fun SwipeContactRow(
                 .graphicsLayer { translationX = shown }
                 .clip(RoundedCornerShape(20.dp))
                 .background(surface)
-                .pointerInput(swipesEnabled, number) {
+                .pointerInput(swipesEnabled, number, maximum, threshold) {
                     if (swipesEnabled) detectHorizontalDragGestures(
                         onDragStart = {
                             dragging = true

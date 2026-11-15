@@ -1,10 +1,26 @@
-# S call — Android Dialer (v1.2.1 Smart SIM Preview)
+# S call — Android Dialer (v1.3.0 Smooth Slide Preview)
 
 **S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal navy-blue Material 3 interface and the approved blue S call launcher icon.
 
 [![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
 
-## ✅ Latest Download — S call v1.2.1 Preview
+## 🟢 Latest — S call v1.3.0 Longer Swipe & Mint Green Icon
+
+**[Download S call v1.3.0 Preview APK](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.3.0-preview/S-call-v1.3.0-preview.apk)**
+
+**[View v1.3.0 Release](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.3.0-preview)**
+
+- **Contact swipe-to-call/message:** drag at least **68% of the full contact row width** before releasing; shorter swipes are cancelled.
+- **Incoming-call answer/decline:** slide the central thumb at least **82% of its travel toward the chosen action**; incomplete swipes spring back with no action.
+- **Smooth, no-bounce release** and one haptic confirmation on reaching the threshold.
+- **New mint/light-green S call icon** across standard launcher icons and adaptive icons.
+- Keeps SIM 1 / SIM 2 calling preference, full-screen caller photo, contacts, recent calls and themes.
+
+Android preview build and automated gesture unit tests are verified by GitHub Actions. **Real-phone call and lock-screen behavior still require physical-device testing.** This is a debug-signed testing APK.
+
+## Previous release — v1.2.1
+
+## ✅ Download — S call v1.2.1 Preview
 
 **[Download latest S call v1.2.1 APK](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.2.1-preview/S-call-v1.2.1-preview.apk)**
 

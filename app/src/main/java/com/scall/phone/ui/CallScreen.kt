@@ -177,7 +177,7 @@ internal fun CallScreen(call: CallSnapshot?, onClose: () -> Unit) {
             Spacer(Modifier.weight(1f))
             when {
                 incoming -> {
-                    Text("Swipe the center button  •  or tap an option", color = Color.White.copy(alpha = 0.82f),
+                    Text("Slide almost to the end  •  or tap an option", color = Color.White.copy(alpha = 0.82f),
                         fontSize = 12.sp)
                     Spacer(Modifier.height(19.dp))
                     IncomingSlideControl(
@@ -244,7 +244,7 @@ private fun IncomingSlideControl(onAnswer: () -> Unit, onDecline: () -> Unit) {
     val declineNow by rememberUpdatedState(onDecline)
     val animated by animateFloatAsState(
         targetValue = drag,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
         label = "Answer decline spring"
     )
     val shown = if (dragging) drag else animated
@@ -253,7 +253,7 @@ private fun IncomingSlideControl(onAnswer: () -> Unit, onDecline: () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxWidth().height(98.dp)) {
         val density = LocalDensity.current
         val maximum = with(density) { ((maxWidth - 78.dp) / 2f).toPx() }.coerceAtLeast(48f)
-        val threshold = maximum * 0.72f
+        val threshold = requiredSlideDistance(maximum, INCOMING_SLIDE_FRACTION)
         val result = chooseSwipeAction(shown, threshold)
         val shape = RoundedCornerShape(48.dp)
 

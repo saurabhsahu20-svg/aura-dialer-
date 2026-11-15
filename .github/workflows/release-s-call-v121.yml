@@ -1,10 +1,5 @@
 name: Release S call v1.2.1 Preview APK
 on:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/release-s-call-v121.yml
-      - app/build.gradle.kts
   workflow_dispatch:
 
 permissions:
