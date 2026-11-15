@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -72,6 +73,51 @@ internal fun ContactAvatar(name: String, photo: String?, size: Dp = 52.dp) {
     }
 }
 
+/**
+ * Direction-specific call symbol, shown on the caller avatar and next to
+ * the label. Symbol + label ensures color is never the only distinction.
+ */
+@Composable
+internal fun CallDirection.callTint(): Color {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.45f
+    return when (this) {
+        CallDirection.INCOMING -> if (dark) Color(0xFF65E1AE) else Color(0xFF08794C)
+        CallDirection.OUTGOING -> if (dark) Color(0xFF83BDFF) else Color(0xFF2363C7)
+        CallDirection.MISSED -> if (dark) Color(0xFFFF9696) else Color(0xFFC73A49)
+        CallDirection.OTHER -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+}
+
+internal fun CallDirection.icon() = when (this) {
+    CallDirection.INCOMING -> Icons.Default.CallReceived
+    CallDirection.OUTGOING -> Icons.Default.CallMade
+    CallDirection.MISSED -> Icons.Default.CallMissed
+    CallDirection.OTHER -> Icons.Default.Phone
+}
+
+@Composable
+internal fun CallDirectionBadge(direction: CallDirection, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.size(25.dp),
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 2.dp
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize().padding(2.dp)
+                .background(direction.callTint().copy(alpha = 0.15f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = direction.icon(),
+                contentDescription = "${direction.label} call",
+                tint = direction.callTint(),
+                modifier = Modifier.size(15.dp)
+            )
+        }
+    }
+}
+
 /** Gesture follows the finger without animation lag, springs back on release, haptics once. */
 @Composable
 internal fun SwipeContactRow(
@@ -81,6 +127,7 @@ internal fun SwipeContactRow(
     subtitle: String,
     swipesEnabled: Boolean,
     missed: Boolean = false,
+    callDirection: CallDirection? = null,
     onCall: () -> Unit,
     onMessage: () -> Unit,
     onClick: () -> Unit,
@@ -171,15 +218,49 @@ internal fun SwipeContactRow(
                 .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ContactAvatar(name, photoUri, 47.dp)
-            Spacer(Modifier.width(13.dp))
+            Box(Modifier.size(51.dp)) {
+                ContactAvatar(name, photoUri, 47.dp)
+                if (callDirection != null) {
+                    CallDirectionBadge(
+                        direction = callDirection,
+                        modifier = Modifier.align(Alignment.BottomEnd).offset(x = 2.dp, y = 2.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(name, style = MaterialTheme.typography.bodyLarge,
-                    color = if (missed) Color(0xFFE05F65) else MaterialTheme.colorScheme.onSurface,
+                    color = if (missed) CallDirection.MISSED.callTint() else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(4.dp))
-                Text(subtitle, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                if (callDirection != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = callDirection.icon(),
+                            contentDescription = null,
+                            tint = callDirection.callTint(),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            callDirection.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = callDirection.callTint(),
+                            maxLines = 1
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            subtitle,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
+                        )
+                    }
+                } else {
+                    Text(subtitle, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                }
             }
             if (onPhoto != null) {
                 IconButton(onClick = onPhoto, modifier = Modifier.size(42.dp)) {

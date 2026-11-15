@@ -10,6 +10,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -766,6 +768,14 @@ private fun RecentsScreen(
     onMessage: (String) -> Unit,
     onDetails: (RecentEntry) -> Unit
 ) {
+    var filter by remember { mutableStateOf<CallDirection?>(null) }
+    val filteredCalls = remember(calls, filter) {
+        calls.filter { filter == null || classifyCallDirection(it.type) == filter }
+    }
+    val incomingCount = calls.count { classifyCallDirection(it.type) == CallDirection.INCOMING }
+    val outgoingCount = calls.count { classifyCallDirection(it.type) == CallDirection.OUTGOING }
+    val missedCount = calls.count { classifyCallDirection(it.type) == CallDirection.MISSED }
+
     LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
             Row(
@@ -776,7 +786,7 @@ private fun RecentsScreen(
                 Column {
                     Text("Call history", style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold)
-                    Text("${calls.size} recent calls",
+                    Text("${calls.size} calls · ${missedCount} missed",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.labelMedium)
                 }
@@ -788,56 +798,96 @@ private fun RecentsScreen(
                 }
             }
         }
+        item {
+            // A compact scrollable segment bar keeps call-type filtering visible on small phones.
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                    .padding(start = 17.dp, end = 17.dp, bottom = 9.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FilterChip(
+                    selected = filter == null,
+                    onClick = { filter = null },
+                    label = { Text("All · ${calls.size}") },
+                    leadingIcon = {
+                        Icon(Icons.Default.History, null, Modifier.size(17.dp))
+                    }
+                )
+                listOf(
+                    CallDirection.INCOMING to incomingCount,
+                    CallDirection.OUTGOING to outgoingCount,
+                    CallDirection.MISSED to missedCount
+                ).forEach { (direction, count) ->
+                    FilterChip(
+                        selected = filter == direction,
+                        onClick = { filter = direction },
+                        label = { Text("${direction.label} · $count") },
+                        leadingIcon = {
+                            Icon(direction.icon(), null, Modifier.size(17.dp),
+                                tint = direction.callTint())
+                        }
+                    )
+                }
+            }
+        }
         if (selectionMode) {
             item {
-                Surface(color = MaterialTheme.colorScheme.surfaceContainerLow,
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(17.dp)) {
+                    shape = RoundedCornerShape(17.dp)
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("${selectedIds.size} selected", modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.labelLarge)
-                        TextButton(onClick = { onSelectAll(calls) }, enabled = calls.isNotEmpty()) {
-                            Text("Select all")
-                        }
-                        Button(onClick = onDeleteSelected, enabled = selectedIds.isNotEmpty(),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) {
-                            Text("Delete")
-                        }
+                        TextButton(
+                            onClick = { onSelectAll(filteredCalls) },
+                            enabled = filteredCalls.isNotEmpty()
+                        ) { Text("Select visible") }
+                        Button(
+                            onClick = onDeleteSelected,
+                            enabled = selectedIds.isNotEmpty(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            )
+                        ) { Text("Delete") }
                     }
                 }
             }
         }
-        if (calls.isEmpty()) {
+        if (filteredCalls.isEmpty()) {
             item {
                 EmptyState(
-                    if (loading) "Loading calls…" else "No recent calls",
-                    "Your recent calls will appear here."
+                    if (loading) "Loading calls…" else if (filter == null) "No recent calls"
+                        else "No ${filter!!.label.lowercase()} calls",
+                    if (filter == null) "Your recent calls will appear here."
+                        else "Try All calls to view other call types."
                 )
             }
         }
-        items(calls, key = { it.id }) { item ->
-            val direction = when (item.type) {
-                android.provider.CallLog.Calls.MISSED_TYPE -> "Missed"
-                android.provider.CallLog.Calls.OUTGOING_TYPE -> "Outgoing"
-                android.provider.CallLog.Calls.INCOMING_TYPE -> "Incoming"
-                else -> "Call"
-            }
+        items(filteredCalls, key = { it.id }) { item ->
+            val direction = classifyCallDirection(item.type)
             val time = remember(item.timestamp) {
                 java.text.SimpleDateFormat("dd MMM, h:mm a", java.util.Locale.getDefault())
                     .format(java.util.Date(item.timestamp))
             }
             val note = historyStore.note(item)
+            val duration = if (item.duration > 0 &&
+                direction != CallDirection.MISSED) {
+                " · ${formatCallDuration(item.duration)}"
+            } else ""
             Column {
                 SwipeContactRow(
                     name = historyStore.title(item) ?: item.name,
                     number = item.number,
                     photoUri = photos.photoFor(item.number) ?: item.photo,
-                    subtitle = "$direction · $time" +
-                        if (note.isBlank()) "" else " · ${note.take(38)}",
-                    missed = item.type == android.provider.CallLog.Calls.MISSED_TYPE,
+                    subtitle = time + duration + if (note.isBlank()) "" else " · ${note.take(30)}",
+                    missed = direction == CallDirection.MISSED,
+                    callDirection = direction,
                     swipesEnabled = swipesEnabled && !selectionMode,
                     onCall = { onCall(item.number) },
                     onMessage = { onMessage(item.number) },
@@ -851,8 +901,10 @@ private fun RecentsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (selectionMode) {
-                        Checkbox(checked = item.id in selectedIds,
-                            onCheckedChange = { onToggleSelected(item) })
+                        Checkbox(
+                            checked = item.id in selectedIds,
+                            onCheckedChange = { onToggleSelected(item) }
+                        )
                         Text("Select", style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.weight(1f))
                     } else {
