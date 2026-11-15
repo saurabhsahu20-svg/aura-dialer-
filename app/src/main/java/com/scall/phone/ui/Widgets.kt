@@ -287,6 +287,7 @@ internal fun KeypadScreen(
     onCall: () -> Unit,
     onMessage: () -> Unit,
     onSimSettings: () -> Unit,
+    onBack: () -> Unit,
     simLabel: String
 ) {
     val context = LocalContext.current
@@ -307,6 +308,9 @@ internal fun KeypadScreen(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            IconButton(onClick = onBack, modifier = Modifier.size(46.dp)) {
+                Icon(Icons.Default.ArrowBack, "Return to previous screen")
+            }
             Text(
                 "Keypad",
                 modifier = Modifier.weight(1f),

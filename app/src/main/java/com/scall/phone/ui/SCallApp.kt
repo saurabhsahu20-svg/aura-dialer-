@@ -516,6 +516,7 @@ internal fun SCallApp(
                             onCall = { requestCall(dialNumber) },
                             onMessage = { requestMessage(dialNumber) },
                             onSimSettings = { navigateTo("SIM Manager") },
+                            onBack = { navigateBack() },
                             simLabel = label
                         )
                     }
