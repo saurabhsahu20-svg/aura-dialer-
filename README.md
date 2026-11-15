@@ -1,8 +1,24 @@
-# S call — Android Dialer (v1.7.1 Clean Home Preview)
+# S call — Android Dialer (v1.7.2 QA-Verified Preview)
 
 **S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal Material 3 interface and the approved light-green S call launcher icon.
 
 [![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
+
+## ✅ Latest Release — S call v1.7.2 Quality Tested Preview
+
+### **[⬇️ Download Verified APK](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.2-preview/S-call.apk)**
+
+### **[📦 ZIP Backup Download](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.2-preview/S-call-v1.7.2-install-package.zip)**
+
+**[GitHub v1.7.2 Release](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.7.2-preview)** · **[SHA-256 Checksum](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.2-preview/S-call-SHA256SUMS.txt)**
+
+**Quality:** Unit tests, Android Lint, and Android 10 emulator UI tests (4/4) passed. Fixed Android 8.0 incoming-call lock-screen compatibility and improved SIM permission checks. The release APK is checked for package identity, version, signature and integrity.
+
+**No features removed:** Light-green icon, Recents history filters, hidden SIM home banner, SIM choice through toolbar/Settings, Keypad, back navigation, call sliders and caller photos remain.
+
+**Limitation:** This is a debug-signed test APK. Cellular call/dual-SIM/real lock-screen functionality needs physical-device testing. Certificate mismatch with older previews may prevent in-place upgrades. Back up app data before uninstalling.
+
+## Previous version — v1.7.1
 
 ## ✅ Latest — S call v1.7.1 Clean Home Screen
 
