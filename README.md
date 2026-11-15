@@ -1,10 +1,28 @@
-# S call — Android Dialer (v1.5.0 SIM Setup Preview)
+# S call — Android Dialer (v1.6.0 Interactive Keypad Preview)
 
 **S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal Material 3 interface and the approved light-green S call launcher icon.
 
 [![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
 
-## 📲 Latest — S call v1.5.0 SIM Setup & Smart Calling
+## ⌨️ Latest — S call v1.6.0 Interactive Keypad & Smart Back
+
+**[Download the latest S call v1.6.0 Android APK](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.6.0-preview/S-call-v1.6.0-preview.apk)**
+
+**[Open S call v1.6.0 GitHub Release](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.6.0-preview)**
+
+- **Premium tactile keypad:** interactive animated number keys with subtle haptic feedback.
+- **Better back behavior:** Android Back now navigates to the preceding screen rather than unexpectedly closing the app; Keypad includes its own visible back arrow.
+- **Smart contact suggestions:** number/T9 lookup; tap to fill the dialed number.
+- **Quick controls:** paste, clear, message, call, long-press zero for +, long-press delete to clear.
+- **SIM shortcut on Keypad:** quick access to calling SIM preferences.
+- The Call button remains accessible even when the keypad scrolls on small displays.
+- Retains light-green icon, SIM settings, smooth call sliders, photo editor and call-history manager.
+
+**Testing:** Automated keypad/back navigation/gesture tests and APK build verified by GitHub Actions. Physical-device calling and back-gesture tests are still pending. The APK is debug-signed for testing, not a production Play Store release.
+
+## Previous release — v1.5.0
+
+## 📲 S call v1.5.0 SIM Setup & Smart Calling
 
 **[Download S call v1.5.0 APK](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.5.0-preview/S-call-v1.5.0-preview.apk)**
 
