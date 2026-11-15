@@ -82,7 +82,7 @@ internal fun SwipeContactRow(
     val messageAction by rememberUpdatedState(onMessage)
     val springOffset by animateFloatAsState(
         targetValue = offset,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumHigh),
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
         label = "Contact row spring"
     )
     val shown = if (dragging) offset else springOffset

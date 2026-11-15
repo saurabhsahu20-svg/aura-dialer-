@@ -244,7 +244,7 @@ private fun IncomingSlideControl(onAnswer: () -> Unit, onDecline: () -> Unit) {
     val declineNow by rememberUpdatedState(onDecline)
     val animated by animateFloatAsState(
         targetValue = drag,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumHigh),
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
         label = "Answer decline spring"
     )
     val shown = if (dragging) drag else animated

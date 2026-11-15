@@ -33,6 +33,8 @@ jobs:
         with:
           gradle-version: '8.10.2'
           cache-read-only: ${{ github.event_name == 'pull_request' }}
+      - name: Verify swipe accuracy unit tests
+        run: gradle --no-daemon :app:testDebugUnitTest
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
       - name: Upload debug APK
