@@ -775,10 +775,19 @@ private fun RecentsScreen(
                     FilterChip(
                         selected = filter == direction,
                         onClick = { filter = direction },
-                        label = { Text("${direction.label} · $count") },
+                        label = {
+                            Text(
+                                "${direction.label} · $count",
+                                fontWeight = FontWeight.ExtraBold,
+                                color = direction.callTint()
+                            )
+                        },
                         leadingIcon = {
-                            Icon(direction.icon(), null, Modifier.size(17.dp),
-                                tint = direction.callTint())
+                            CallDirectionSymbol(
+                                direction = direction,
+                                modifier = Modifier.size(21.dp),
+                                description = "${direction.label} filter"
+                            )
                         }
                     )
                 }

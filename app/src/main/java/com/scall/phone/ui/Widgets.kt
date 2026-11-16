@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -27,6 +28,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -78,15 +81,8 @@ internal fun ContactAvatar(name: String, photo: String?, size: Dp = 52.dp) {
  * the label. Symbol + label ensures color is never the only distinction.
  */
 @Composable
-internal fun CallDirection.callTint(): Color {
-    val dark = MaterialTheme.colorScheme.background.luminance() < 0.45f
-    return when (this) {
-        CallDirection.INCOMING -> if (dark) Color(0xFF65E1AE) else Color(0xFF08794C)
-        CallDirection.OUTGOING -> if (dark) Color(0xFF83BDFF) else Color(0xFF2363C7)
-        CallDirection.MISSED -> if (dark) Color(0xFFFF9696) else Color(0xFFC73A49)
-        CallDirection.OTHER -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-}
+internal fun CallDirection.callTint(): Color =
+    strongColor(MaterialTheme.colorScheme.background.luminance() < 0.45f)
 
 internal fun CallDirection.icon() = when (this) {
     CallDirection.INCOMING -> Icons.Default.CallReceived
@@ -95,24 +91,83 @@ internal fun CallDirection.icon() = when (this) {
     CallDirection.OTHER -> Icons.Default.Phone
 }
 
+/**
+ * Thicker, rounded 3.4dp-style direction arrows, drawn from the same shape
+ * geometry in Light and Dark themes. This is intentionally more visible
+ * than Material's small 15dp default icon at avatar size.
+ */
+@Composable
+internal fun CallDirectionSymbol(
+    direction: CallDirection,
+    modifier: Modifier = Modifier,
+    description: String? = null
+) {
+    val tint = direction.callTint()
+    if (direction == CallDirection.OTHER) {
+        Icon(Icons.Default.Phone, contentDescription = description, tint = tint, modifier = modifier)
+    } else {
+        val semanticModifier = if (description == null) modifier
+            else modifier.semantics { contentDescription = description }
+        Canvas(semanticModifier) {
+            val w = size.width
+            val h = size.height
+            // Stroke scales with icon size; the rounded ends remain distinct at 18dp.
+            val stroke = size.minDimension * 0.165f
+            fun segment(ax: Float, ay: Float, bx: Float, by: Float) {
+                drawLine(
+                    color = tint,
+                    start = Offset(w * ax, h * ay),
+                    end = Offset(w * bx, h * by),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round
+                )
+            }
+            when (direction) {
+                CallDirection.INCOMING -> {
+                    // Received: bold descending arrow down-left.
+                    segment(.74f, .24f, .28f, .70f)
+                    segment(.28f, .70f, .28f, .40f)
+                    segment(.28f, .70f, .58f, .70f)
+                }
+                CallDirection.OUTGOING -> {
+                    // Made: bold rising arrow up-right.
+                    segment(.26f, .74f, .72f, .28f)
+                    segment(.72f, .28f, .42f, .28f)
+                    segment(.72f, .28f, .72f, .58f)
+                }
+                CallDirection.MISSED -> {
+                    // Missed: broken/kinked path with down-right arrowhead.
+                    segment(.17f, .29f, .38f, .50f)
+                    segment(.38f, .50f, .54f, .34f)
+                    segment(.54f, .34f, .82f, .62f)
+                    segment(.82f, .62f, .82f, .33f)
+                    segment(.82f, .62f, .53f, .62f)
+                }
+                CallDirection.OTHER -> Unit
+            }
+        }
+    }
+}
+
 @Composable
 internal fun CallDirectionBadge(direction: CallDirection, modifier: Modifier = Modifier) {
+    val tint = direction.callTint()
     Surface(
-        modifier = modifier.size(25.dp),
+        modifier = modifier.size(30.dp),
         shape = CircleShape,
         color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, tint.copy(alpha = 0.7f)),
         shadowElevation = 2.dp
     ) {
         Box(
             modifier = Modifier.fillMaxSize().padding(2.dp)
-                .background(direction.callTint().copy(alpha = 0.15f), CircleShape),
+                .background(tint.copy(alpha = 0.17f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = direction.icon(),
-                contentDescription = "${direction.label} call",
-                tint = direction.callTint(),
-                modifier = Modifier.size(15.dp)
+            CallDirectionSymbol(
+                direction = direction,
+                description = "${direction.label} call",
+                modifier = Modifier.size(19.dp)
             )
         }
     }
@@ -218,7 +273,7 @@ internal fun SwipeContactRow(
                 .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(Modifier.size(51.dp)) {
+            Box(Modifier.size(54.dp)) {
                 ContactAvatar(name, photoUri, 47.dp)
                 if (callDirection != null) {
                     CallDirectionBadge(
@@ -235,17 +290,16 @@ internal fun SwipeContactRow(
                 Spacer(Modifier.height(4.dp))
                 if (callDirection != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = callDirection.icon(),
-                            contentDescription = null,
-                            tint = callDirection.callTint(),
-                            modifier = Modifier.size(16.dp)
+                        CallDirectionSymbol(
+                            direction = callDirection,
+                            modifier = Modifier.size(20.dp),
+                            description = "${callDirection.label} direction"
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
                             callDirection.label,
                             style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.ExtraBold,
                             color = callDirection.callTint(),
                             maxLines = 1
                         )
