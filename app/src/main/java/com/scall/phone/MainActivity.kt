@@ -65,16 +65,23 @@ class MainActivity : ComponentActivity() {
 
     private fun requestDialerRole() {
         if (repository.isDefaultDialer()) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val manager = getSystemService(RoleManager::class.java)
-            if (manager.isRoleAvailable(RoleManager.ROLE_DIALER)) {
-                roleLauncher.launch(manager.createRequestRoleIntent(RoleManager.ROLE_DIALER))
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val manager = getSystemService(RoleManager::class.java)
+                if (manager != null && manager.isRoleAvailable(RoleManager.ROLE_DIALER)) {
+                    roleLauncher.launch(manager.createRequestRoleIntent(RoleManager.ROLE_DIALER))
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                roleLauncher.launch(Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER).putExtra(
+                    TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName
+                ))
             }
-        } else {
-            @Suppress("DEPRECATION")
-            roleLauncher.launch(Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER).putExtra(
-                TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName
-            ))
+        } catch (error: RuntimeException) {
+            android.util.Log.e("SCall", "Default Phone app settings unavailable", error)
+            android.widget.Toast.makeText(this,
+                "Choose S Caller under Settings > Apps > Default apps > Phone",
+                android.widget.Toast.LENGTH_LONG).show()
         }
     }
 
@@ -88,6 +95,12 @@ class MainActivity : ComponentActivity() {
         // Call log editing is only supported while S call owns the default-dialer role.
         if (repository.isDefaultDialer()) required += Manifest.permission.WRITE_CALL_LOG
         if (Build.VERSION.SDK_INT >= 33) required += Manifest.permission.POST_NOTIFICATIONS
-        permissionsLauncher.launch(required.toTypedArray())
+        try {
+            permissionsLauncher.launch(required.toTypedArray())
+        } catch (error: RuntimeException) {
+            android.util.Log.e("SCall", "Unable to request phone permissions", error)
+            android.widget.Toast.makeText(this, "Allow Phone access in Android app settings",
+                android.widget.Toast.LENGTH_LONG).show()
+        }
     }
 }
