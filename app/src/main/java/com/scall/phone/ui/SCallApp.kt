@@ -409,12 +409,13 @@ internal fun SCallApp(
         Scaffold(
             containerColor = scheme.background,
             topBar = {
-                if (photoEditor != null || activeContact != null || page == "SIM Manager" || page == "Settings") {
+                if (photoEditor != null || activeContact != null || page == "SIM Manager" || page == "Settings" || page == "Recording Manager") {
                     TopAppBar(
                         title = { Text(when {
                             photoEditor != null -> "Caller photo"
                             activeContact != null -> "Contact details"
                             page == "SIM Manager" -> "SIM & network"
+                            page == "Recording Manager" -> "Call Recording"
                             else -> "Settings"
                         }) },
                         navigationIcon = {
@@ -453,7 +454,7 @@ internal fun SCallApp(
                 }
             },
             bottomBar = {
-                if (activeContact == null && photoEditor == null && page != "Settings" && page != "SIM Manager") {
+                if (activeContact == null && photoEditor == null && page != "Settings" && page != "SIM Manager" && page != "Recording Manager") {
                     NavigationBar(containerColor = scheme.surface, tonalElevation = 1.dp) {
                         tabs.forEach { tab ->
                             NavigationBarItem(
@@ -505,6 +506,7 @@ internal fun SCallApp(
                         requestDialerRole = requestDialerRole,
                         requestPermissions = requestPermissions,
                         onSimSettings = { navigateTo("SIM Manager") },
+                        onRecordingSettings = { navigateTo("Recording Manager") },
                         incomingAccess = IncomingCallVisibility.access(
                             context, repository.isDefaultDialer()
                         ),
@@ -520,6 +522,7 @@ internal fun SCallApp(
                             }
                         }
                     )
+                    page == "Recording Manager" -> RecordingSettingsScreen()
                     page == "SIM Manager" -> SimSettingsScreen(
                         repository = repository,
                         preferences = simPrefs,
@@ -1038,6 +1041,7 @@ private fun SettingsScreen(
     defaultDialer: Boolean, contactsGranted: Boolean, logsGranted: Boolean,
     requestDialerRole: () -> Unit, requestPermissions: () -> Unit,
     onSimSettings: () -> Unit,
+    onRecordingSettings: () -> Unit,
     incomingAccess: IncomingCallAccess,
     onFixIncomingCallDisplay: () -> Unit
 ) {
@@ -1161,6 +1165,25 @@ private fun SettingsScreen(
                     headlineContent = { Text("Swipe on name to call") },
                     supportingContent = { Text("Right: call · Left: message") },
                     trailingContent = { Switch(checked = swipeEnabled, onCheckedChange = onSwipeEnabledChanged) }
+                )
+            }
+        }
+        item {
+            SettingsCard {
+                ListItem(
+                    leadingContent = {
+                        Icon(Icons.Default.FiberManualRecord, null,
+                            tint = MaterialTheme.colorScheme.primary)
+                    },
+                    headlineContent = {
+                        Text("Call Recording", fontWeight = FontWeight.Bold)
+                    },
+                    supportingContent = {
+                        Text("Private recording library · Import, play and manage audio. " +
+                            "SIM auto-recording unavailable.")
+                    },
+                    trailingContent = { Icon(Icons.Default.ChevronRight, "Open") },
+                    modifier = Modifier.clickable(onClick = onRecordingSettings)
                 )
             }
         }

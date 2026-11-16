@@ -8,6 +8,7 @@ import android.util.AtomicFile
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.io.FileInputStream
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -150,10 +151,15 @@ internal class RecordingStore(private val context: Context) {
                 }
             } ?: throw IllegalArgumentException("Cannot open selected audio")
             if (copied < 1024L) throw IllegalArgumentException("Audio file is empty or too short")
-            val duration = MediaMetadataRetriever().use { retriever ->
-                retriever.setDataSource(temporary.absolutePath)
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-                    ?.toLongOrNull() ?: 0L
+            val retriever = MediaMetadataRetriever()
+            val duration = try {
+                FileInputStream(temporary).use { source ->
+                    retriever.setDataSource(source.fd)
+                    retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                        ?.toLongOrNull() ?: 0L
+                }
+            } finally {
+                retriever.release()
             }
             if (duration <= 0L) throw IllegalArgumentException(
                 "The selected file has no readable audio duration"

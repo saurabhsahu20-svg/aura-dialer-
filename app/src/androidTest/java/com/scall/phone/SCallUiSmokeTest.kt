@@ -58,6 +58,16 @@ class SCallUiSmokeTest {
     }
 
     @Test
+    fun callRecordingLibraryShowsTruthfulSupportAndImport() {
+        rule.onNodeWithContentDescription("Settings").performClick()
+        rule.onNodeWithText("Call Recording").performClick()
+        rule.onNodeWithText("Cellular recording: Not available").assertExists()
+        rule.onNodeWithText("Import").assertExists()
+        rule.onNodeWithContentDescription("Back").performClick()
+        rule.onNodeWithText("Settings").assertExists()
+    }
+
+    @Test
     fun incomingDisplaySettingsAreVisible() {
         rule.onNodeWithContentDescription("Settings").performClick()
         rule.onNodeWithText("Incoming call display").assertExists()
