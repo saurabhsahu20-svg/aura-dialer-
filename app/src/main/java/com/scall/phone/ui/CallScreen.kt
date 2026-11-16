@@ -120,7 +120,12 @@ private fun CallPhotoBackground(photo: String?, style: CallerPhotoStyle = Caller
 }
 
 @Composable
-internal fun CallScreen(call: CallSnapshot?, onClose: () -> Unit) {
+internal fun CallScreen(
+    call: CallSnapshot?,
+    onClose: () -> Unit,
+    phoneServiceUnavailable: Boolean = false,
+    onRetry: () -> Unit = {}
+) {
     val context = LocalContext.current
     val store = remember { PhotoStore(context.applicationContext) }
     val repo = remember { PhoneRepository(context.applicationContext) }
@@ -212,12 +217,42 @@ internal fun CallScreen(call: CallSnapshot?, onClose: () -> Unit) {
                     Spacer(Modifier.height(25.dp))
                 }
                 else -> {
-                    CircularProgressIndicator(color = Color.White)
-                    Spacer(Modifier.height(12.dp))
-                    Text("Connecting to phone service…", color = Color.White)
-                    Spacer(Modifier.height(20.dp))
+                    if (phoneServiceUnavailable) {
+                        Icon(
+                            Icons.Default.PhoneDisabled,
+                            contentDescription = null,
+                            tint = Color(0xFFFFB5B5),
+                            modifier = Modifier.size(38.dp)
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "Phone service not connected",
+                            color = Color.White,
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(9.dp))
+                        Text(
+                            "No live call was supplied by Android Telecom. Check that S call is your default Phone app.",
+                            color = Color.White.copy(alpha = .85f),
+                            textAlign = TextAlign.Center,
+                            fontSize = 13.sp
+                        )
+                        Spacer(Modifier.height(15.dp))
+                        Button(onClick = onRetry) {
+                            Icon(Icons.Default.Refresh, null)
+                            Spacer(Modifier.width(9.dp))
+                            Text("Retry call screen")
+                        }
+                    } else {
+                        CircularProgressIndicator(color = Color.White)
+                        Spacer(Modifier.height(12.dp))
+                        Text("Opening call screen…", color = Color.White)
+                    }
+                    Spacer(Modifier.height(16.dp))
                     TextButton(onClick = onClose) { Text("Close", color = Color.White) }
-                    Spacer(Modifier.height(60.dp))
+                    Spacer(Modifier.height(54.dp))
                 }
             }
         }

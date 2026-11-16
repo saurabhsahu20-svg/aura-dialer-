@@ -82,6 +82,7 @@ class SCallInCallService : InCallService() {
 
     override fun onBringToForeground(showDialpad: Boolean) {
         super.onBringToForeground(showDialpad)
+        CallBridge.refreshFromTelecom()
         // Only foreground Telecom request launches the Activity directly.
         // Incoming calls launched in background use Android's full-screen intent.
         startActivity(CallUiActivity.createIntent(this))
@@ -130,7 +131,13 @@ class SCallInCallService : InCallService() {
             CallUiActivity.createIntent(this),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val answerIntent = actionPending("ANSWER", 112)
+        // Direct Activity PendingIntent: Android 12+ blocks BroadcastReceiver
+        // notification trampolines. The in-call Activity handles answering and
+        // immediately renders the real Telecom call state.
+        val answerIntent = PendingIntent.getActivity(
+            this, 112, CallUiActivity.createAnswerIntent(this),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         val declineIntent = actionPending("REJECT", 111)
         val hangUpIntent = actionPending("END", 113)
         val person = Person.Builder().setName(caller).setImportant(true).build()

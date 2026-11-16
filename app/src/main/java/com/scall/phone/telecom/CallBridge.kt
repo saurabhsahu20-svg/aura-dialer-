@@ -32,15 +32,45 @@ internal object CallBridge {
     val current = mutable.asStateFlow()
 
     fun bind(inCallService: InCallService) {
+        if (service !== inCallService && service != null) {
+            // A replacement Telecom binding must not inherit callbacks from
+            // the older service. The old service's onDestroy can arrive later.
+            callbacks.toMap().forEach { (call, callback) ->
+                call.unregisterCallback(callback)
+            }
+            callbacks.clear()
+        }
         service = inCallService
-        refresh()
+        refreshFromTelecom()
     }
 
     fun unbind(inCallService: InCallService) {
-        if (service === inCallService) service = null
-        callbacks.keys.toList().forEach { removeCall(it) }
+        // An older binding's onDestroy MUST NOT erase the current call.
+        if (service !== inCallService) return
+        service = null
+        callbacks.toMap().forEach { (call, callback) ->
+            call.unregisterCallback(callback)
+        }
+        callbacks.clear()
         mutable.value = null
     }
+
+    /**
+     * Recover live Android Telecom calls after activity/service recreation.
+     * Never invent a call: when Telecom reports none, show the user an honest
+     * reconnect state instead of a fake connected-call screen.
+     */
+    fun refreshFromTelecom() {
+        val live = try { service?.calls?.toList().orEmpty() }
+            catch (_: Exception) { emptyList() }
+        live.forEach { call ->
+            if (call.state != Call.STATE_DISCONNECTED && !callbacks.containsKey(call)) {
+                addCall(call)
+            }
+        }
+        refresh()
+    }
+
 
     fun addCall(call: Call) {
         val callback = object : Call.Callback() {
@@ -61,9 +91,14 @@ internal object CallBridge {
         refresh()
     }
 
-    private fun primaryCall(): Call? = callbacks.keys.firstOrNull { it.state == Call.STATE_RINGING }
-        ?: callbacks.keys.firstOrNull { it.state == Call.STATE_ACTIVE }
-        ?: callbacks.keys.firstOrNull()
+    private fun primaryCall(): Call? {
+        val available = callbacks.keys.filter {
+            it.state != Call.STATE_DISCONNECTED && it.state != Call.STATE_DISCONNECTING
+        }
+        return available.firstOrNull { it.state == Call.STATE_RINGING }
+            ?: available.firstOrNull { it.state == Call.STATE_ACTIVE }
+            ?: available.firstOrNull()
+    }
 
     fun refresh() {
         val call = primaryCall()

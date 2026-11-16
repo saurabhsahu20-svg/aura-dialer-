@@ -3,6 +3,9 @@ package com.scall.phone.telecom
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import android.os.Build
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -16,10 +19,36 @@ import kotlinx.coroutines.delay
 
 class CallUiActivity : ComponentActivity() {
     companion object {
+        const val ACTION_ANSWER = "com.scall.phone.action.ANSWER_CALL"
+
         fun createIntent(context: Context): Intent =
             Intent(context, CallUiActivity::class.java).addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             )
+
+        fun createAnswerIntent(context: Context): Intent =
+            createIntent(context).setAction(ACTION_ANSWER)
+    }
+
+    private fun handleCallAction(intent: Intent?) {
+        CallBridge.refreshFromTelecom()
+        if (intent?.action == ACTION_ANSWER) {
+            CallBridge.answer()
+            // Do not answer a different future call if the original notification
+            // action is replayed or this Activity is recreated.
+            intent.action = null
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleCallAction(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        CallBridge.refreshFromTelecom()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,15 +70,37 @@ class CallUiActivity : ComponentActivity() {
         window.statusBarColor = android.graphics.Color.TRANSPARENT
         @Suppress("DEPRECATION")
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        handleCallAction(intent)
         setContent {
             val call by CallBridge.current.collectAsState()
-            LaunchedEffect(call) {
-                if (call == null) {
-                    delay(1600) // Give Telecom time to attach after placing a call.
+            var retryAttempt by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+            var noCallTimeout by remember { mutableStateOf(false) }
+            var hadLiveCall by remember { mutableStateOf(false) }
+            LaunchedEffect(call, retryAttempt) {
+                if (call != null) {
+                    hadLiveCall = true
+                    noCallTimeout = false
+                } else if (hadLiveCall) {
+                    // Android Telecom has removed the call; dismiss the controls.
+                    delay(600)
                     if (CallBridge.current.value == null) finish()
+                } else {
+                    noCallTimeout = false
+                    CallBridge.refreshFromTelecom()
+                    delay(2500)
+                    noCallTimeout = CallBridge.current.value == null
                 }
             }
-            CallScreen(call = call, onClose = { finish() })
+            CallScreen(
+                call = call,
+                onClose = { finish() },
+                phoneServiceUnavailable = noCallTimeout,
+                onRetry = {
+                    noCallTimeout = false
+                    CallBridge.refreshFromTelecom()
+                    retryAttempt++
+                }
+            )
         }
     }
 }
