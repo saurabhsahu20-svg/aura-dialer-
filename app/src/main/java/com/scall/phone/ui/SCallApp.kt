@@ -168,6 +168,12 @@ internal fun SCallApp(
 
     fun requestCall(number: String) {
         if (number.isBlank()) return
+        if (!repository.hasCellularTelephony()) {
+            Toast.makeText(context,
+                "This device does not support cellular phone calls",
+                Toast.LENGTH_LONG).show()
+            return
+        }
         if (!repository.isDefaultDialer()) {
             Toast.makeText(context, "Set S call as your default phone app first", Toast.LENGTH_LONG).show()
             requestDialerRole()

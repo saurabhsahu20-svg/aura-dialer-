@@ -50,9 +50,12 @@ internal class PhoneRepository(private val context: Context) {
     fun hasCallPermission() = permitted(Manifest.permission.CALL_PHONE)
     fun hasPhoneStatePermission() = permitted(Manifest.permission.READ_PHONE_STATE)
 
+    fun hasCellularTelephony(): Boolean =
+        context.packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY)
+
     fun isDefaultDialer(): Boolean {
-        val manager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
-        return manager.defaultDialerPackage == context.packageName
+        val manager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+        return manager?.defaultDialerPackage == context.packageName
     }
 
     suspend fun contacts(): List<ContactEntry> = withContext(Dispatchers.IO) {
@@ -162,7 +165,8 @@ internal class PhoneRepository(private val context: Context) {
     fun availableSimAccounts(): List<SimAccount> {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) !=
             PackageManager.PERMISSION_GRANTED) return emptyList()
-        val telecom = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+        val telecom = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+            ?: return emptyList()
         return try {
             telecom.callCapablePhoneAccounts.mapIndexed { index, handle ->
                 val label = try {
@@ -215,7 +219,8 @@ internal class PhoneRepository(private val context: Context) {
     fun placeCall(number: String, account: PhoneAccountHandle? = null) {
         if (number.isBlank()) return
         val uri = Uri.fromParts("tel", number, null)
-        val telecom = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+        val telecom = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+            ?: throw IllegalStateException("Android Telecom is unavailable")
         if (isDefaultDialer() && hasCallPermission()) {
             val extras = Bundle().apply {
                 if (account != null) putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, account)
