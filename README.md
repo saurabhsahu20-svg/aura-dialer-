@@ -1,8 +1,27 @@
-# S call — Android Dialer (v1.7.6 Android 6+ Compatibility Preview)
+# S call — Android Dialer (v1.7.7 Call Screen Recovery Preview)
 
 **S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal Material 3 interface and the approved light-green S call launcher icon.
 
 [![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
+
+## 📞 Latest — S call v1.7.7 Answered Call Screen Recovery
+
+### **[⬇️ Download v1.7.7 APK](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.7-preview/S-call.apk)**
+
+### **[📦 ZIP Backup if APK Download Fails](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.7-preview/S-call-v1.7.7-install-package.zip)**
+
+**[GitHub v1.7.7 Release](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.7.7-preview)**
+
+- Fixes the screenshot issue where answering an incoming call may open a blank **Connecting to phone service…** screen.
+- The notification Answer button now directly opens the call UI using an Activity PendingIntent, as recommended for Android 12+.
+- Android Telecom call data is recovered on Activity/Service recreation; older services cannot clear replacement service call state.
+- A bounded loading state with **Retry call screen** replaces never-ending loading when Android Telecom has supplied no call.
+- Preserves in-call controls, full-screen caller photo, smooth swipe answer, dual SIM, light-green app icon, bold call-type symbols, responsive keypad and Android 6+ support.
+- Unit tests, Android Lint, emulator recovery UI tests and APK checks are part of GitHub CI.
+
+**Preview warning:** Real incoming carrier calls still require physical testing. This is a debug-signed APK; back up preferences before replacing older preview apps if their certificates differ.
+
+## Previous version — v1.7.6
 
 ## 📱 Latest — S call v1.7.6 Wider Android Compatibility
 
