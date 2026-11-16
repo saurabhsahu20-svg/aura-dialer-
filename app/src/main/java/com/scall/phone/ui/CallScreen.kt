@@ -179,6 +179,35 @@ internal fun CallScreen(
                 Text("${call?.accountLabel}", color = Color.White.copy(alpha = 0.70f),
                     fontSize = 12.sp, textAlign = TextAlign.Center)
             }
+            if (call != null && !incoming) {
+                Spacer(Modifier.height(8.dp))
+                Surface(
+                    color = Color(0xFF071C38).copy(alpha = 0.72f),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.HeadsetMic, "Current audio output", tint = Color(0xFF88D8FF),
+                            modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(7.dp))
+                        Text("Audio: ${call.audioRouteLabel}",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold)
+                    }
+                }
+                if (!call.audioRouteError.isNullOrBlank()) {
+                    Spacer(Modifier.height(5.dp))
+                    Text(
+                        call.audioRouteError,
+                        color = Color(0xFFFFC6C6),
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
             Spacer(Modifier.height(11.dp))
             CallTimer(call)
             Spacer(Modifier.weight(1f))
@@ -373,12 +402,65 @@ private fun IncomingSlideControl(onAnswer: () -> Unit, onDecline: () -> Unit) {
 
 @Composable
 private fun ActiveCallControls(call: CallSnapshot, onKeypad: () -> Unit) {
+    var routePickerOpen by remember { mutableStateOf(false) }
+
+    if (routePickerOpen) {
+        AlertDialog(
+            onDismissRequest = { routePickerOpen = false },
+            icon = { Icon(Icons.Default.HeadsetMic, null) },
+            title = { Text("Call audio output") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text(
+                        "Choose a device available through Android Telecom. " +
+                            "Audio is managed by your phone and carrier.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    if (call.availableAudioRoutes.isEmpty()) {
+                        Text("No audio routes reported yet. Try again when the call connects.")
+                    } else {
+                        call.availableAudioRoutes.forEach { route ->
+                            val selected = route.title.equals(call.audioRouteLabel, ignoreCase = true) ||
+                                (route.kind == "speaker" && call.speakerOn)
+                            FilledTonalButton(
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                onClick = {
+                                    routePickerOpen = false
+                                    CallBridge.changeAudioRoute(route.key)
+                                }
+                            ) {
+                                Icon(
+                                    when (route.kind) {
+                                        "speaker" -> Icons.Default.VolumeUp
+                                        "bluetooth" -> Icons.Default.Bluetooth
+                                        "wired" -> Icons.Default.Headset
+                                        else -> Icons.Default.PhoneAndroid
+                                    },
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Text(route.title, modifier = Modifier.weight(1f))
+                                if (selected) Icon(Icons.Default.Check, "Selected")
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { routePickerOpen = false }) { Text("Close") }
+            }
+        )
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             ControlButton(Icons.Default.MicOff, if (call.isMuted) "Unmute" else "Mute",
                 active = call.isMuted, onClick = CallBridge::toggleMute)
             ControlButton(Icons.Default.Dialpad, "Keypad", onClick = onKeypad)
             ControlButton(Icons.Default.VolumeUp, "Speaker", active = call.speakerOn,
+                enabled = call.availableAudioRoutes.any { it.kind == "speaker" } || call.speakerOn,
                 onClick = CallBridge::toggleSpeaker)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -388,10 +470,11 @@ private fun ActiveCallControls(call: CallSnapshot, onKeypad: () -> Unit) {
             ControlButton(Icons.Default.Add, "Add call", enabled = call.canAddCall,
                 onClick = CallBridge::addCall)
             ControlButton(
-                if (call.canMerge) Icons.Default.CallMerge else Icons.Default.Bluetooth,
-                if (call.canMerge) "Merge" else "Bluetooth",
-                enabled = call.canMerge || call.bluetoothAvailable,
-                onClick = if (call.canMerge) CallBridge::merge else CallBridge::selectBluetooth
+                if (call.canMerge) Icons.Default.CallMerge else Icons.Default.HeadsetMic,
+                if (call.canMerge) "Merge" else "Audio",
+                enabled = call.canMerge || call.availableAudioRoutes.isNotEmpty(),
+                onClick = if (call.canMerge) CallBridge::merge
+                    else { { routePickerOpen = true } }
             )
         }
     }
