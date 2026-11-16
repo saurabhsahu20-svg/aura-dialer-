@@ -269,92 +269,6 @@ internal fun RecordingSettingsScreen() {
             }
         }
         item {
-            Card {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Recording preferences", fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium)
-                    ListItem(
-                        headlineContent = { Text("Automatic incoming calls") },
-                        supportingContent = { Text("Unavailable for standard SIM calls") },
-                        trailingContent = {
-                            Switch(checked = canAutomaticallyRecordCellularCalls(),
-                                onCheckedChange = null, enabled = false)
-                        }
-                    )
-                    ListItem(
-                        headlineContent = { Text("Automatic outgoing calls") },
-                        supportingContent = { Text("Unavailable for standard SIM calls") },
-                        trailingContent = {
-                            Switch(checked = false, onCheckedChange = null, enabled = false)
-                        }
-                    )
-                    ListItem(
-                        headlineContent = { Text("Contact-specific recording") },
-                        supportingContent = {
-                            Text("Requires a supported, consented audio recording pipeline")
-                        }
-                    )
-                    Text(
-                        "Audio quality, recording pause/resume and Bluetooth capture " +
-                            "depend on the recording app that created the file. " +
-                            "No HD or two-way recording is claimed by S call.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-        item {
-            Card {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Text("Privacy & storage", fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium)
-                    Text("Private on-device folder • no cloud upload • no background microphone access",
-                        style = MaterialTheme.typography.bodySmall)
-                    Text(
-                        "Imported audio is stored in S call's private app storage. " +
-                            "Share only with everyone’s permission.",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Older than:", modifier = Modifier.weight(1f))
-                        Box {
-                            OutlinedButton(onClick = { retentionMenu = true }) {
-                                Text(if (retention == 0) "Keep all" else "$retention days")
-                            }
-                            DropdownMenu(
-                                expanded = retentionMenu,
-                                onDismissRequest = { retentionMenu = false }
-                            ) {
-                                listOf(0, 30, 90).forEach { days ->
-                                    DropdownMenuItem(
-                                        text = { Text(if (days == 0) "Keep all" else "$days days") },
-                                        onClick = {
-                                            store.setRetentionDays(days)
-                                            retention = days
-                                            retentionMenu = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    Text(
-                        "Files are never removed automatically. Choose a period and tap " +
-                            "Clean up to delete private copies; keep all is the default.",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    if (retention > 0) {
-                        OutlinedButton(onClick = { cleanupConfirm = true }) {
-                            Icon(Icons.Default.CleaningServices, null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Clean up older files")
-                        }
-                    }
-                }
-            }
-        }
-        item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "Recording Library · ${recordings.size}",
@@ -445,6 +359,92 @@ internal fun RecordingSettingsScreen() {
                         IconButton(onClick = { selectedForDelete = item }) {
                             Icon(Icons.Default.Delete, contentDescription = "Delete recording",
                                 tint = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            Card {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Recording preferences", fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium)
+                    ListItem(
+                        headlineContent = { Text("Automatic incoming calls") },
+                        supportingContent = { Text("Unavailable for standard SIM calls") },
+                        trailingContent = {
+                            Switch(checked = canAutomaticallyRecordCellularCalls(),
+                                onCheckedChange = null, enabled = false)
+                        }
+                    )
+                    ListItem(
+                        headlineContent = { Text("Automatic outgoing calls") },
+                        supportingContent = { Text("Unavailable for standard SIM calls") },
+                        trailingContent = {
+                            Switch(checked = false, onCheckedChange = null, enabled = false)
+                        }
+                    )
+                    ListItem(
+                        headlineContent = { Text("Contact-specific recording") },
+                        supportingContent = {
+                            Text("Requires a supported, consented audio recording pipeline")
+                        }
+                    )
+                    Text(
+                        "Audio quality, recording pause/resume and Bluetooth capture " +
+                            "depend on the recording app that created the file. " +
+                            "No HD or two-way recording is claimed by S call.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+        item {
+            Card {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Text("Privacy & storage", fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium)
+                    Text("Private on-device folder • no cloud upload • no background microphone access",
+                        style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "Imported audio is stored in S call's private app storage. " +
+                            "Share only with everyone’s permission.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Older than:", modifier = Modifier.weight(1f))
+                        Box {
+                            OutlinedButton(onClick = { retentionMenu = true }) {
+                                Text(if (retention == 0) "Keep all" else "$retention days")
+                            }
+                            DropdownMenu(
+                                expanded = retentionMenu,
+                                onDismissRequest = { retentionMenu = false }
+                            ) {
+                                listOf(0, 30, 90).forEach { days ->
+                                    DropdownMenuItem(
+                                        text = { Text(if (days == 0) "Keep all" else "$days days") },
+                                        onClick = {
+                                            store.setRetentionDays(days)
+                                            retention = days
+                                            retentionMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Text(
+                        "Files are never removed automatically. Choose a period and tap " +
+                            "Clean up to delete private copies; keep all is the default.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    if (retention > 0) {
+                        OutlinedButton(onClick = { cleanupConfirm = true }) {
+                            Icon(Icons.Default.CleaningServices, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Clean up older files")
                         }
                     }
                 }
