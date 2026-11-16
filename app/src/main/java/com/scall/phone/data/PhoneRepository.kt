@@ -190,16 +190,25 @@ internal class PhoneRepository(private val context: Context) {
         } catch (_: Exception) { emptyList() }
     }
 
+    // These specific default-subscription APIs were introduced only in API 24.
+    // Android 6.0 still supports Telecom calling accounts; report the default
+    // as unknown instead of crashing or guessing the wrong physical SIM.
     fun defaultVoiceSubscription(): Int = try {
-        SubscriptionManager.getDefaultVoiceSubscriptionId()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+            SubscriptionManager.getDefaultVoiceSubscriptionId()
+        else SubscriptionManager.INVALID_SUBSCRIPTION_ID
     } catch (_: Exception) { SubscriptionManager.INVALID_SUBSCRIPTION_ID }
 
     fun defaultSmsSubscription(): Int = try {
-        SubscriptionManager.getDefaultSmsSubscriptionId()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+            SubscriptionManager.getDefaultSmsSubscriptionId()
+        else SubscriptionManager.INVALID_SUBSCRIPTION_ID
     } catch (_: Exception) { SubscriptionManager.INVALID_SUBSCRIPTION_ID }
 
     fun defaultDataSubscription(): Int = try {
-        SubscriptionManager.getDefaultDataSubscriptionId()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+            SubscriptionManager.getDefaultDataSubscriptionId()
+        else SubscriptionManager.INVALID_SUBSCRIPTION_ID
     } catch (_: Exception) { SubscriptionManager.INVALID_SUBSCRIPTION_ID }
 
     /** Always use TelecomManager for calls from the default dialer. */
