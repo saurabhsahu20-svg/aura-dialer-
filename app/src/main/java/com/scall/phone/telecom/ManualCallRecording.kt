@@ -194,7 +194,9 @@ class ManualCallRecordingService : Service() {
                 .build()
             startForeground(NOTIFICATION, notification)
             @Suppress("DEPRECATION")
-            val recorder = MediaRecorder().apply {
+            val recorder = MediaRecorder()
+            mediaRecorder = recorder
+            recorder.apply {
                 // Android protects this source. It is not accessible to ordinary APKs.
                 setAudioSource(MediaRecorder.AudioSource.VOICE_CALL)
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
@@ -204,7 +206,6 @@ class ManualCallRecordingService : Service() {
                 setOutputFile(output.absolutePath)
                 prepare()
             }
-            mediaRecorder = recorder
             recorder.start()
             ManualCallRecording.update(RecordingStatus(
                 RecordingStatus.Phase.RECORDING, SystemClock.elapsedRealtime()
@@ -215,8 +216,17 @@ class ManualCallRecordingService : Service() {
             ManualCallRecording.update(RecordingStatus(
                 RecordingStatus.Phase.ERROR, message = "Recording is unsupported or could not start"
             ))
-            stopForeground(STOP_FOREGROUND_REMOVE)
+            leaveForeground()
             stopSelf()
+        }
+    }
+
+    private fun leaveForeground() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
         }
     }
 
@@ -245,7 +255,7 @@ class ManualCallRecordingService : Service() {
         } finally {
             runCatching { recorder.release() }
         }
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        leaveForeground()
         if (!stopped || recordingFile == null) {
             recordingFile?.delete()
             ManualCallRecording.update(RecordingStatus(
