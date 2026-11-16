@@ -27,7 +27,8 @@ internal data class SavedRecording(
     val importedAtMillis: Long,
     val durationMillis: Long,
     val fileName: String,
-    val bytes: Long
+    val bytes: Long,
+    val source: String = "import"
 )
 
 internal fun recordingRetentionExpired(
@@ -75,7 +76,7 @@ internal class RecordingStore(private val context: Context) {
             .put("id", item.id).put("title", item.title)
             .put("number", item.phoneNumber)
             .put("imported", item.importedAtMillis)
-            .put("duration", item.durationMillis)
+            .put("duration", item.durationMillis).put("source", item.source)
             .put("file", item.fileName).put("bytes", item.bytes)
             .toString().toByteArray(Charsets.UTF_8)
 
@@ -85,7 +86,7 @@ internal class RecordingStore(private val context: Context) {
             json.getString("id"), json.getString("title"),
             json.optString("number"), json.getLong("imported"),
             json.getLong("duration"), json.getString("file"),
-            json.getLong("bytes")
+            json.getLong("bytes"), json.optString("source", "import")
         )
         if (file.name != "${item.id}.json" || playableFile(item) == null) null else item
     }.getOrNull()
@@ -175,6 +176,56 @@ internal class RecordingStore(private val context: Context) {
         } catch (error: Exception) {
             temporary.delete()
             destination.delete()
+            throw error
+        }
+    }
+
+    /**
+     * Accept only audio produced by our explicitly started privileged call recorder.
+     * Never publish files that are empty, truncated, or missing readable duration.
+     */
+    suspend fun saveManualCapture(
+        temporary: File, number: String, startedAtMillis: Long
+    ): SavedRecording = withContext(Dispatchers.IO) {
+        val audioDir = dir.canonicalFile
+        require(temporary.canonicalFile.parentFile == audioDir &&
+            temporary.name.endsWith(".partial")) {
+            "Recording is outside the private temporary folder"
+        }
+        require(temporary.isFile && temporary.length() in 1024L..MAX_FILE_BYTES) {
+            "Recording contains no valid audio data"
+        }
+        val retriever = MediaMetadataRetriever()
+        val duration = try {
+            FileInputStream(temporary).use { source ->
+                retriever.setDataSource(source.fd)
+                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                    ?.toLongOrNull() ?: 0L
+            }
+        } finally {
+            retriever.release()
+        }
+        require(duration > 0L) { "No playable audio detected" }
+        val id = UUID.randomUUID().toString()
+        val dest = File(audioDir, "$id.m4a")
+        if (!temporary.renameTo(dest)) {
+            throw IllegalStateException("Unable to save recording")
+        }
+        val item = SavedRecording(
+            id = id,
+            title = "Manual call recording",
+            phoneNumber = number.filter { it.isDigit() || it == '+' }.take(24),
+            importedAtMillis = startedAtMillis.coerceAtLeast(1L),
+            durationMillis = duration,
+            fileName = dest.name,
+            bytes = dest.length(),
+            source = "manual"
+        )
+        try {
+            write(item)
+            item
+        } catch (error: Exception) {
+            dest.delete()
             throw error
         }
     }
