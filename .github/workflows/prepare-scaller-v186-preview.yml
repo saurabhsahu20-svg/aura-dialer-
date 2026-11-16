@@ -1,0 +1,62 @@
+name: Prepare S Caller v1.8.6 manual recording preview
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-publish-preview:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require exact verified version
+        run: |
+          grep -q 'versionName = "1.8.6"' app/build.gradle.kts
+          grep -q 'versionCode = 24' app/build.gradle.kts
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Unit tests and Android lint
+        run: gradle --no-daemon :app:testDebugUnitTest :app:lintDebug
+      - name: Build Android debug preview
+        run: gradle --no-daemon :app:assembleDebug
+      - name: Verify APK and copy to release folder
+        run: |
+          set -euo pipefail
+          mkdir -p release-output
+          cp app/build/outputs/apk/debug/app-debug.apk release-output/S-Caller-v1.8.6-dev-preview.apk
+          test -s release-output/S-Caller-v1.8.6-dev-preview.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose release-output/S-Caller-v1.8.6-dev-preview.apk
+          BADGING="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging release-output/S-Caller-v1.8.6-dev-preview.apk)"
+          echo "$BADGING" | grep -q "package: name='com.scall.phone'"
+          echo "$BADGING" | grep -q "versionName='1.8.6'"
+          sha256sum release-output/S-Caller-v1.8.6-dev-preview.apk > release-output/SHA256SUMS.txt
+      - name: Archive validated artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: S-Caller-v1.8.6-verified-dev-preview
+          path: release-output/
+      - name: Publish clearly labeled debug prerelease (manual dispatch only)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="v1.8.6-dev-preview"
+          FILES=(release-output/S-Caller-v1.8.6-dev-preview.apk release-output/SHA256SUMS.txt)
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$TAG" --notes-file RELEASE_NOTES_v1.8.6.md --prerelease --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" "${FILES[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "S Caller v1.8.6 — Developer Preview (No ordinary cellular recording)" \
+              --notes-file RELEASE_NOTES_v1.8.6.md --prerelease
+          fi
