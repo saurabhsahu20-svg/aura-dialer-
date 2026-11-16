@@ -42,6 +42,25 @@ class RecordingLibrarySmokeTest {
         return buffer.array()
     }
 
+    @Test fun brokenManualRecordingNeverAppearsInLibrary() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = RecordingStore(context)
+        val broken = File(context.filesDir,
+            "recordings/manual-invalid-${System.currentTimeMillis()}.partial")
+        broken.parentFile?.mkdirs()
+        try {
+            broken.writeBytes(byteArrayOf(1, 2, 3, 4))
+            val result = runCatching {
+                store.saveManualCapture(broken, "+911234567890", System.currentTimeMillis())
+            }
+            assertTrue("Short or corrupt manual recording must be rejected", result.isFailure)
+            assertTrue("Bad audio must not be published", store.all()
+                .none { it.fileName == broken.name })
+        } finally {
+            broken.delete()
+        }
+    }
+
     @Test fun consentedAudioImportMetadataPlaybackAndDeletion() = runBlocking {
         val context: Context = InstrumentationRegistry.getInstrumentation().targetContext
         val original = File(context.filesDir, "recordings/qa-import-source.wav")
