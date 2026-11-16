@@ -10,6 +10,8 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.telecom.Call
 import android.telecom.CallAudioState
+import android.telecom.CallEndpoint
+import androidx.annotation.RequiresApi
 import android.telecom.InCallService
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
@@ -96,6 +98,26 @@ class SCallInCallService : InCallService() {
     override fun onCallAudioStateChanged(audioState: CallAudioState) {
         super.onCallAudioStateChanged(audioState)
         CallBridge.refresh()
+    }
+
+    // Android 14+ reports the actual endpoint and any newly connected devices.
+    // Never force a route: Telecom must approve the selection.
+    @RequiresApi(34)
+    override fun onAvailableCallEndpointsChanged(availableEndpoints: List<CallEndpoint>) {
+        super.onAvailableCallEndpointsChanged(availableEndpoints)
+        CallBridge.updateAvailableEndpoints(availableEndpoints)
+    }
+
+    @RequiresApi(34)
+    override fun onCallEndpointChanged(callEndpoint: CallEndpoint) {
+        super.onCallEndpointChanged(callEndpoint)
+        CallBridge.updateSelectedEndpoint(callEndpoint)
+    }
+
+    @RequiresApi(34)
+    override fun onMuteStateChanged(isMuted: Boolean) {
+        super.onMuteStateChanged(isMuted)
+        CallBridge.updateMutedState(isMuted)
     }
 
     override fun onDestroy() {
