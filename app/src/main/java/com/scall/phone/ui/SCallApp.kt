@@ -49,6 +49,8 @@ import com.scall.phone.telecom.CallBridge
 import com.scall.phone.telecom.CallUiActivity
 import com.scall.phone.telecom.IncomingCallAccess
 import com.scall.phone.telecom.IncomingCallVisibility
+import com.scall.phone.telecom.AudioCapabilityInspector
+import com.scall.phone.telecom.cellularAudioProcessingLabel
 import com.scall.phone.ui.theme.Blue
 import com.scall.phone.ui.theme.SCallTheme
 import kotlinx.coroutines.Dispatchers
@@ -1040,6 +1042,7 @@ private fun SettingsScreen(
     onFixIncomingCallDisplay: () -> Unit
 ) {
     var themeMenu by remember { mutableStateOf(false) }
+    val audioCapabilities = remember { AudioCapabilityInspector.inspect() }
     LazyColumn(contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Text("Settings", style = MaterialTheme.typography.headlineSmall,
@@ -1079,6 +1082,54 @@ private fun SettingsScreen(
                         }
                     }
                 )
+            }
+        }
+        item {
+            SettingsCard {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.GraphicEq, null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            "Voice quality & audio capabilities",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Text(
+                        cellularAudioProcessingLabel(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        "SIM calls use your device's modem and voice processing. S call " +
+                            "cannot directly activate AI noise cancellation, echo cancellation " +
+                            "or microphone gain controls on protected carrier audio.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    HorizontalDivider()
+                    Text(
+                        "Capabilities available for app-owned VoIP microphone sessions " +
+                            "(not active during SIM calls):",
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                    Text(
+                        "Noise suppression: ${if (audioCapabilities.noiseSuppressor) "Available" else "Not reported"}" +
+                            "   •   Echo cancellation: ${if (audioCapabilities.echoCanceler) "Available" else "Not reported"}" +
+                            "   •   Auto gain: ${if (audioCapabilities.autoGainControl) "Available" else "Not reported"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "Audio output can be selected during a call using the Audio button. " +
+                            "No microphone recording or voice data is collected by this check.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
         item {
