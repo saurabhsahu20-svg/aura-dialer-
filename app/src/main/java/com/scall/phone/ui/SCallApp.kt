@@ -1055,6 +1055,25 @@ private fun SettingsScreen(
             SettingsCard {
                 ListItem(
                     leadingContent = {
+                        Icon(Icons.Default.FiberManualRecord, null,
+                            tint = MaterialTheme.colorScheme.primary)
+                    },
+                    headlineContent = {
+                        Text("Call Recording", fontWeight = FontWeight.Bold)
+                    },
+                    supportingContent = {
+                        Text("Private recording library · Import, play and manage audio. " +
+                            "SIM auto-recording unavailable.")
+                    },
+                    trailingContent = { Icon(Icons.Default.ChevronRight, "Open") },
+                    modifier = Modifier.clickable(onClick = onRecordingSettings)
+                )
+            }
+        }
+        item {
+            SettingsCard {
+                ListItem(
+                    leadingContent = {
                         Icon(Icons.Default.PhoneInTalk, null,
                             tint = if (incomingAccess == IncomingCallAccess.READY)
                                 MaterialTheme.colorScheme.primary
@@ -1165,25 +1184,6 @@ private fun SettingsScreen(
                     headlineContent = { Text("Swipe on name to call") },
                     supportingContent = { Text("Right: call · Left: message") },
                     trailingContent = { Switch(checked = swipeEnabled, onCheckedChange = onSwipeEnabledChanged) }
-                )
-            }
-        }
-        item {
-            SettingsCard {
-                ListItem(
-                    leadingContent = {
-                        Icon(Icons.Default.FiberManualRecord, null,
-                            tint = MaterialTheme.colorScheme.primary)
-                    },
-                    headlineContent = {
-                        Text("Call Recording", fontWeight = FontWeight.Bold)
-                    },
-                    supportingContent = {
-                        Text("Private recording library · Import, play and manage audio. " +
-                            "SIM auto-recording unavailable.")
-                    },
-                    trailingContent = { Icon(Icons.Default.ChevronRight, "Open") },
-                    modifier = Modifier.clickable(onClick = onRecordingSettings)
                 )
             }
         }
