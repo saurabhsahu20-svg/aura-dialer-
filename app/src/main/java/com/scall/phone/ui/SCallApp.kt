@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.sp
 import com.scall.phone.R
 import com.scall.phone.data.CallerPhotoStyle
 import com.scall.phone.data.ContactEntry
+import com.scall.phone.data.CallStartAccess
+import com.scall.phone.data.callStartAccess
 import com.scall.phone.data.PhoneRepository
 import com.scall.phone.data.PhotoStore
 import com.scall.phone.data.RecentEntry
@@ -187,7 +189,10 @@ internal fun SCallApp(
             Toast.makeText(context, "Phone permission required", Toast.LENGTH_SHORT).show()
         } catch (error: Exception) {
             android.util.Log.e("SCall", "Android Telecom could not place call", error)
-            Toast.makeText(context, "Unable to start call", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context,
+                if (error is IllegalStateException) "Set S Caller as your default Phone app and retry"
+                else "Unable to start call. Check your SIM and phone settings",
+                Toast.LENGTH_LONG).show()
         }
     }
 
@@ -199,15 +204,30 @@ internal fun SCallApp(
                 Toast.LENGTH_LONG).show()
             return
         }
-        if (!repository.isDefaultDialer()) {
-            Toast.makeText(context, "Set S call as your default phone app first", Toast.LENGTH_LONG).show()
-            requestDialerRole()
-            return
-        }
-        if (!repository.hasCallPermission() || !repository.hasPhoneStatePermission()) {
-            Toast.makeText(context, "Allow Phone permission to choose a calling SIM", Toast.LENGTH_LONG).show()
-            requestPermissions()
-            return
+        when (callStartAccess(
+            repository.isDefaultDialer(),
+            repository.hasCallPermission(),
+            repository.hasPhoneStatePermission()
+        )) {
+            CallStartAccess.NEED_DEFAULT_DIALER -> {
+                Toast.makeText(context, "Set S Caller as your default Phone app first",
+                    Toast.LENGTH_LONG).show()
+                requestDialerRole()
+                return
+            }
+            CallStartAccess.NEED_CALL_PERMISSION -> {
+                Toast.makeText(context, "Allow Phone permission before making a call",
+                    Toast.LENGTH_LONG).show()
+                requestPermissions()
+                return
+            }
+            CallStartAccess.USE_DEFAULT_SIM -> {
+                // READ_PHONE_STATE is not required to place a call.
+                Toast.makeText(context, "Using the system default SIM", Toast.LENGTH_SHORT).show()
+                dial(number)
+                return
+            }
+            CallStartAccess.SIM_SELECTION_AVAILABLE -> Unit
         }
         val accounts = repository.availableSimAccounts()
         val activeSims = repository.availableSmsSubscriptions()

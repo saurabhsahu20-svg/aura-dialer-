@@ -35,24 +35,32 @@ class SCallInCallService : InCallService() {
 
     override fun onCreate() {
         super.onCreate()
-        CallBridge.bind(this)
+        try {
+            CallBridge.bind(this)
+        } catch (error: RuntimeException) {
+            android.util.Log.e("SCallInCallService", "Telecom binding not ready", error)
+        }
         val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         // Notification channels were introduced in Android 8.0. Android 6/7
         // use CATEGORY_CALL + PRIORITY_MAX through NotificationCompat instead.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(
-                NotificationChannel(
-                    IncomingCallVisibility.CHANNEL_ID,
-                    getString(R.string.incoming_calls_channel),
-                    NotificationManager.IMPORTANCE_HIGH
-                ).apply {
-                    description = getString(R.string.incoming_calls_description)
-                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-                    // Telecom provides the ringtone; avoid playing it twice.
-                    setSound(null, null)
-                    enableVibration(false)
-                }
-            )
+            try {
+                manager.createNotificationChannel(
+                    NotificationChannel(
+                        IncomingCallVisibility.CHANNEL_ID,
+                        getString(R.string.incoming_calls_channel),
+                        NotificationManager.IMPORTANCE_HIGH
+                    ).apply {
+                        description = getString(R.string.incoming_calls_description)
+                        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                        // Telecom provides the ringtone; avoid playing it twice.
+                        setSound(null, null)
+                        enableVibration(false)
+                    }
+                )
+            } catch (error: RuntimeException) {
+                android.util.Log.e("SCallInCallService", "Unable to set up call alerts", error)
+            }
         }
     }
 
@@ -84,8 +92,18 @@ class SCallInCallService : InCallService() {
     }
 
     override fun onCallRemoved(call: Call) {
-        callbackByCall.remove(call)?.let(call::unregisterCallback)
-        CallBridge.removeCall(call)
+        callbackByCall.remove(call)?.let { callback ->
+            try {
+                call.unregisterCallback(callback)
+            } catch (error: RuntimeException) {
+                android.util.Log.w("SCallInCallService", "Call observer already removed", error)
+            }
+        }
+        try {
+            CallBridge.removeCall(call)
+        } catch (error: RuntimeException) {
+            android.util.Log.w("SCallInCallService", "Unable to remove disconnected call", error)
+        }
         updateCallNotification()
         super.onCallRemoved(call)
     }
@@ -135,11 +153,19 @@ class SCallInCallService : InCallService() {
 
     override fun onDestroy() {
         callbackByCall.toMap().forEach { (call, callback) ->
-            call.unregisterCallback(callback)
+            try {
+                call.unregisterCallback(callback)
+            } catch (error: RuntimeException) {
+                android.util.Log.w("SCallInCallService", "Observer cleanup failed", error)
+            }
         }
         callbackByCall.clear()
-        CallBridge.unbind(this)
-        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIFICATION_ID)
+        try {
+            CallBridge.unbind(this)
+            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIFICATION_ID)
+        } catch (error: RuntimeException) {
+            android.util.Log.w("SCallInCallService", "Call service cleanup failed", error)
+        }
         super.onDestroy()
     }
 

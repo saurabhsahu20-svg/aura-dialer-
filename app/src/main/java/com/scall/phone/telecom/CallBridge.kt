@@ -42,12 +42,29 @@ internal object CallBridge {
     private val mutable = MutableStateFlow<CallSnapshot?>(null)
     val current = mutable.asStateFlow()
 
+    private fun safelyUnregister(call: Call, callback: Call.Callback) {
+        try {
+            call.unregisterCallback(callback)
+        } catch (error: RuntimeException) {
+            android.util.Log.w("SCallBridge", "Call callback already removed", error)
+        }
+    }
+
+    private inline fun safeCallAction(name: String, action: () -> Unit) {
+        try {
+            action()
+        } catch (error: RuntimeException) {
+            android.util.Log.w("SCallBridge", "Telecom action failed: $name", error)
+            refresh()
+        }
+    }
+
     fun bind(inCallService: InCallService) {
         if (service !== inCallService && service != null) {
             // A replacement Telecom binding must not inherit callbacks from
             // the older service. The old service's onDestroy can arrive later.
             callbacks.toMap().forEach { (call, callback) ->
-                call.unregisterCallback(callback)
+                safelyUnregister(call, callback)
             }
             callbacks.clear()
         }
@@ -68,7 +85,7 @@ internal object CallBridge {
         latestMute = null
         routeError = null
         callbacks.toMap().forEach { (call, callback) ->
-            call.unregisterCallback(callback)
+            safelyUnregister(call, callback)
         }
         callbacks.clear()
         mutable.value = null
@@ -83,8 +100,12 @@ internal object CallBridge {
         val live = try { service?.calls?.toList().orEmpty() }
             catch (_: Exception) { emptyList() }
         live.forEach { call ->
-            if (call.state != Call.STATE_DISCONNECTED && !callbacks.containsKey(call)) {
-                addCall(call)
+            try {
+                if (call.state != Call.STATE_DISCONNECTED && !callbacks.containsKey(call)) {
+                    addCall(call)
+                }
+            } catch (error: RuntimeException) {
+                android.util.Log.w("SCallBridge", "Unable to register active Telecom call", error)
             }
         }
         refresh()
@@ -99,14 +120,18 @@ internal object CallBridge {
             override fun onChildrenChanged(call: Call, children: MutableList<Call>) = refresh()
         }
         if (!callbacks.containsKey(call)) {
-            callbacks[call] = callback
-            call.registerCallback(callback)
+            try {
+                call.registerCallback(callback)
+                callbacks[call] = callback
+            } catch (error: RuntimeException) {
+                android.util.Log.w("SCallBridge", "Unable to observe Telecom call", error)
+            }
         }
         refresh()
     }
 
     fun removeCall(call: Call) {
-        callbacks.remove(call)?.let(call::unregisterCallback)
+        callbacks.remove(call)?.let { callback -> safelyUnregister(call, callback) }
         refresh()
     }
 
@@ -126,7 +151,8 @@ internal object CallBridge {
             // Vendor Telecom implementations can report an incomplete call while binding.
             // Never terminate the phone process because a snapshot is not ready yet.
             android.util.Log.e("SCallBridge", "Unable to read Telecom call snapshot", error)
-            mutable.value = null
+            // A temporarily unreadable OEM call snapshot must not blank a live call UI.
+            if (callbacks.isEmpty()) mutable.value = null
         }
     }
 
@@ -206,15 +232,18 @@ internal object CallBridge {
         )
     }
 
-    fun answer() { primaryCall()?.takeIf { it.state == Call.STATE_RINGING }
-        ?.answer(VideoProfile.STATE_AUDIO_ONLY) }
+    fun answer() = safeCallAction("answer") {
+        primaryCall()?.takeIf { it.state == Call.STATE_RINGING }
+            ?.answer(VideoProfile.STATE_AUDIO_ONLY)
+    }
 
-    fun reject() { primaryCall()?.takeIf { it.state == Call.STATE_RINGING }
-        ?.reject(false, null) }
+    fun reject() = safeCallAction("reject") {
+        primaryCall()?.takeIf { it.state == Call.STATE_RINGING }?.reject(false, null)
+    }
 
-    fun disconnect() { primaryCall()?.disconnect() }
+    fun disconnect() = safeCallAction("disconnect") { primaryCall()?.disconnect() }
 
-    fun holdOrUnhold() {
+    fun holdOrUnhold() = safeCallAction("hold") {
         primaryCall()?.let { call ->
             when (call.state) {
                 Call.STATE_ACTIVE -> if (call.details.can(Call.Details.CAPABILITY_HOLD)) call.hold()
@@ -223,11 +252,13 @@ internal object CallBridge {
         }
     }
 
-    fun merge() { primaryCall()?.conferenceableCalls?.firstOrNull()?.let { other ->
-        primaryCall()?.conference(other)
-    } ?: primaryCall()?.mergeConference() }
+    fun merge() = safeCallAction("merge") {
+        val call = primaryCall() ?: return@safeCallAction
+        val other = call.conferenceableCalls.firstOrNull()
+        if (other != null) call.conference(other) else call.mergeConference()
+    }
 
-    fun addCall() {
+    fun addCall() = safeCallAction("add call") {
         service?.startActivity(android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
             addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
         })
@@ -346,11 +377,15 @@ internal object CallBridge {
         refresh()
     }
 
-    fun dtmf(digit: Char) {
+    fun dtmf(digit: Char) = safeCallAction("DTMF") {
         primaryCall()?.let { call ->
             call.playDtmfTone(digit)
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                call.stopDtmfTone()
+                try {
+                    call.stopDtmfTone()
+                } catch (error: RuntimeException) {
+                    android.util.Log.w("SCallBridge", "Call ended during DTMF tone", error)
+                }
             }, 130)
         }
     }

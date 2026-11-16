@@ -8,6 +8,12 @@ on:
       - app/build.gradle.kts
       - app/src/main/**
       - app/src/androidTest/**
+  pull_request:
+    paths:
+      - app/build.gradle.kts
+      - app/src/main/**
+      - app/src/androidTest/**
+      - app/src/test/**
   workflow_dispatch:
 
 permissions:
