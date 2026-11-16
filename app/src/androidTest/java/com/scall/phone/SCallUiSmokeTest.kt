@@ -64,7 +64,7 @@ class SCallUiSmokeTest {
         rule.onNodeWithText("Cellular recording: Not available").assertExists()
         rule.onNodeWithText("Import").assertExists()
         rule.onNodeWithContentDescription("Back").performClick()
-        rule.onNodeWithText("Settings").assertExists()
+        rule.onNodeWithText("Incoming call display").assertExists()
     }
 
     @Test
