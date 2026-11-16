@@ -120,6 +120,17 @@ internal object CallBridge {
     }
 
     fun refresh() {
+        try {
+            refreshSnapshot()
+        } catch (error: RuntimeException) {
+            // Vendor Telecom implementations can report an incomplete call while binding.
+            // Never terminate the phone process because a snapshot is not ready yet.
+            android.util.Log.e("SCallBridge", "Unable to read Telecom call snapshot", error)
+            mutable.value = null
+        }
+    }
+
+    private fun refreshSnapshot() {
         val call = primaryCall()
         if (call == null) {
             mutable.value = null

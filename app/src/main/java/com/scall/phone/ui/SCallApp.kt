@@ -105,6 +105,7 @@ internal fun SCallApp(
     var pendingSmsNumber by remember { mutableStateOf<String?>(null) }
     var pendingSmsSims by remember { mutableStateOf<List<SmsSubscription>>(emptyList()) }
     val currentCall by CallBridge.current.collectAsState()
+    var waitingForOutgoingCallUi by remember { mutableStateOf(false) }
 
     fun navigateTo(destination: String) {
         if (destination == page) return
@@ -157,13 +158,35 @@ internal fun SCallApp(
         }
     }
 
+    // Do not open the in-call Activity before Android Telecom delivers a real call.
+    // On some devices that races InCallService binding and shows a dead call surface.
+    LaunchedEffect(waitingForOutgoingCallUi, currentCall) {
+        if (waitingForOutgoingCallUi && currentCall != null) {
+            waitingForOutgoingCallUi = false
+            try {
+                context.startActivity(CallUiActivity.createIntent(context))
+            } catch (error: RuntimeException) {
+                android.util.Log.e("SCall", "Unable to show outgoing call UI", error)
+            }
+        }
+    }
+    LaunchedEffect(waitingForOutgoingCallUi) {
+        if (waitingForOutgoingCallUi) {
+            kotlinx.coroutines.delay(10_000)
+            waitingForOutgoingCallUi = false
+        }
+    }
+
     fun dial(number: String, sim: PhoneAccountHandle? = null) {
+        if (waitingForOutgoingCallUi) return // Ignore accidental double taps.
         try {
             repository.placeCall(number, sim)
-            context.startActivity(CallUiActivity.createIntent(context))
-        } catch (_: SecurityException) {
+            waitingForOutgoingCallUi = true
+        } catch (error: SecurityException) {
+            android.util.Log.e("SCall", "Phone permission denied while placing call", error)
             Toast.makeText(context, "Phone permission required", Toast.LENGTH_SHORT).show()
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            android.util.Log.e("SCall", "Android Telecom could not place call", error)
             Toast.makeText(context, "Unable to start call", Toast.LENGTH_SHORT).show()
         }
     }
