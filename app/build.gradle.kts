@@ -10,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId = "com.scall.phone"
-        minSdk = 26
+        minSdk = 23
         targetSdk = 35
         versionCode = 15
         versionName = "1.7.5"

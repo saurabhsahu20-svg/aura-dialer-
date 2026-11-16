@@ -35,20 +35,23 @@ class SCallInCallService : InCallService() {
         super.onCreate()
         CallBridge.bind(this)
         val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        manager.createNotificationChannel(
-            NotificationChannel(
-                IncomingCallVisibility.CHANNEL_ID,
-                getString(R.string.incoming_calls_channel),
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = getString(R.string.incoming_calls_description)
-                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-                // Android Telecom manages the ringtone. A second notification
-                // ringtone is noisy and can make it hard to hear who is calling.
-                setSound(null, null)
-                enableVibration(false)
-            }
-        )
+        // Notification channels were introduced in Android 8.0. Android 6/7
+        // use CATEGORY_CALL + PRIORITY_MAX through NotificationCompat instead.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    IncomingCallVisibility.CHANNEL_ID,
+                    getString(R.string.incoming_calls_channel),
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = getString(R.string.incoming_calls_description)
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                    // Telecom provides the ringtone; avoid playing it twice.
+                    setSound(null, null)
+                    enableVibration(false)
+                }
+            )
+        }
     }
 
     override fun onCallAdded(call: Call) {

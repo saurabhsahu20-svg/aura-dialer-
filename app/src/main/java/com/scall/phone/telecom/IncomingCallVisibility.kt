@@ -46,8 +46,10 @@ internal object IncomingCallVisibility {
             PackageManager.PERMISSION_GRANTED
         val notificationAllowed = permitted && NotificationManagerCompat.from(context)
             .areNotificationsEnabled()
-        val channelAllowed = notificationManager
-            .getNotificationChannel(CHANNEL_ID)?.importance != NotificationManager.IMPORTANCE_NONE
+        // Android 6 and 7 do not have notification channels at all.
+        val channelAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            notificationManager.getNotificationChannel(CHANNEL_ID)?.importance !=
+            NotificationManager.IMPORTANCE_NONE
         val fullScreenAllowed = Build.VERSION.SDK_INT < 34 ||
             notificationManager.canUseFullScreenIntent()
         return resolveIncomingCallAccess(
@@ -68,15 +70,26 @@ internal object IncomingCallVisibility {
                 data = Uri.parse("package:${context.packageName}")
             }
 
-            IncomingCallAccess.NEED_NOTIFICATION_CHANNEL -> {
-                Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
-                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                    putExtra(Settings.EXTRA_CHANNEL_ID, CHANNEL_ID)
+            IncomingCallAccess.NEED_NOTIFICATION_CHANNEL ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        putExtra(Settings.EXTRA_CHANNEL_ID, CHANNEL_ID)
+                    }
+                } else {
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                    }
                 }
-            }
 
-            else -> Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            else -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                }
+            } else {
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                }
             }
         }
         try {
