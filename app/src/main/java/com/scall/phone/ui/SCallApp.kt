@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.scall.phone.R
+import com.scall.phone.SCallCrashDiagnostics
 import com.scall.phone.data.CallerPhotoStyle
 import com.scall.phone.data.ContactEntry
 import com.scall.phone.data.CallStartAccess
@@ -77,6 +78,8 @@ internal fun SCallApp(
     requestPermissions: () -> Unit
 ) {
     val context = LocalContext.current
+    val lastCrash = remember { SCallCrashDiagnostics.last(context) }
+    var showLastCrash by remember { mutableStateOf(lastCrash != null) }
     val prefs = remember { context.getSharedPreferences("s_call_settings", android.content.Context.MODE_PRIVATE) }
     val photos = remember { PhotoStore(context.applicationContext) }
     val simPrefs = remember { SimPreferences(context.applicationContext) }
@@ -304,6 +307,39 @@ internal fun SCallApp(
 
     SCallTheme(theme) {
         val scheme = MaterialTheme.colorScheme
+        if (showLastCrash && lastCrash != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    showLastCrash = false
+                    SCallCrashDiagnostics.clear(context)
+                },
+                title = { Text("S Caller crash detected") },
+                text = {
+                    Text("The app closed unexpectedly. You can copy a private technical report " +
+                        "and share it for troubleshooting. It does not include phone numbers, " +
+                        "contact names, or call recordings.")
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        val clipboard = context.getSystemService(
+                            android.content.Context.CLIPBOARD_SERVICE
+                        ) as android.content.ClipboardManager
+                        clipboard.setPrimaryClip(
+                            android.content.ClipData.newPlainText("S Caller crash report", lastCrash)
+                        )
+                        SCallCrashDiagnostics.clear(context)
+                        showLastCrash = false
+                        Toast.makeText(context, "Crash report copied", Toast.LENGTH_LONG).show()
+                    }) { Text("Copy crash report") }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showLastCrash = false
+                        SCallCrashDiagnostics.clear(context)
+                    }) { Text("Dismiss") }
+                }
+            )
+        }
         if (pendingNumber != null) {
             AlertDialog(
                 onDismissRequest = { pendingNumber = null },
