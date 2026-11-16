@@ -1,8 +1,28 @@
-# S call — Android Dialer (v1.8.0 Premium Audio Routing Preview)
+# S call — Android Dialer (v1.8.1 Private Recording Library Preview)
 
 **S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal Material 3 interface and the approved light-green S call launcher icon.
 
 [![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
+
+## 🎙️ Latest — S call v1.8.1 Private Recording Library
+
+**[⬇️ Download S call v1.8.1 APK](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.8.1-preview/S-call.apk)**
+
+**[📦 ZIP fallback download](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.8.1-preview/S-call-v1.8.1-install-package.zip)**
+
+**[Official GitHub Release](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.8.1-preview)**
+
+- New **Settings → Call Recording** screen provides **consented audio-file import**, searchable history, playback, rename, optional phone number association, explicit sharing and deletion.
+- Private on-device storage with validation, atomic metadata and user-confirmed manual cleanup.
+- The app does **not** record live cellular calls automatically or secretly. Protected SIM-call audio is inaccessible to ordinary third-party apps.
+- Disabled automatic-recording controls explain limitations clearly. App-owned VoIP call recording, encryption and biometric locking have **not** been implemented.
+- No microphone permission, no background audio capture and no uploads.
+- Preserves dialer, history, contacts, SIM controls, caller photos, light-green launcher icon, Audio picker and Android 6+ support.
+- Automated Android unit, Lint, instrumented UI/media-library tests and APK checks form the release verification.
+
+**Preview limitation:** User-imported recordings can be managed; live carrier/VoIP recording and physical-device audio clarity are not supported or verified.
+
+## Previous release — v1.8.0
 
 ## 🎧 Latest — S call v1.8.0 Premium Audio Routing
 

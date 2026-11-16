@@ -1223,7 +1223,7 @@ private fun SettingsScreen(
             }
         }
         item {
-            Text("S call · v1.8.0\nBeautiful calls. Simple experience.",
+            Text("S call · v1.8.1\nBeautiful calls. Simple experience.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
