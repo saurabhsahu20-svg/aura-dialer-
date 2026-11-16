@@ -482,6 +482,9 @@ internal fun SCallApp(
                             }
                         },
                         actions = {
+                            IconButton(onClick = { navigateTo("Recording Manager") }) {
+                                Icon(Icons.Default.GraphicEq, contentDescription = "Recordings")
+                            }
                             IconButton(onClick = { localRefresh++ }) {
                                 Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                             }
