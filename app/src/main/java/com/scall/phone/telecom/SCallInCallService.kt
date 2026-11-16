@@ -58,7 +58,11 @@ class SCallInCallService : InCallService() {
 
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
-        CallBridge.addCall(call)
+        try {
+            CallBridge.addCall(call)
+        } catch (error: RuntimeException) {
+            android.util.Log.e("SCallInCallService", "Call bridge not ready", error)
+        }
         if (!callbackByCall.containsKey(call)) {
             val callback = object : Call.Callback() {
                 override fun onStateChanged(call: Call, state: Int) {
@@ -69,8 +73,12 @@ class SCallInCallService : InCallService() {
                     updateCallNotification()
                 }
             }
-            callbackByCall[call] = callback
-            call.registerCallback(callback)
+            try {
+                call.registerCallback(callback)
+                callbackByCall[call] = callback
+            } catch (error: RuntimeException) {
+                android.util.Log.e("SCallInCallService", "Failed to monitor call changes", error)
+            }
         }
         updateCallNotification()
     }
@@ -87,7 +95,12 @@ class SCallInCallService : InCallService() {
         CallBridge.refreshFromTelecom()
         // Only foreground Telecom request launches the Activity directly.
         // Incoming calls launched in background use Android's full-screen intent.
-        startActivity(CallUiActivity.createIntent(this))
+        try {
+            startActivity(CallUiActivity.createIntent(this))
+        } catch (error: RuntimeException) {
+            // Android may block background activity launches; the call notification remains.
+            android.util.Log.w("SCallInCallService", "Unable to bring call to foreground", error)
+        }
     }
 
     override fun onCanAddCallChanged(canAddCall: Boolean) {
@@ -131,6 +144,15 @@ class SCallInCallService : InCallService() {
     }
 
     private fun updateCallNotification() {
+        try {
+            updateCallNotificationSafely()
+        } catch (error: RuntimeException) {
+            // Notification channel/CallStyle errors must not tear down an active call.
+            android.util.Log.e("SCallInCallService", "Call notification failed", error)
+        }
+    }
+
+    private fun updateCallNotificationSafely() {
         val primary = callbackByCall.keys.firstOrNull { it.state == Call.STATE_RINGING }
             ?: callbackByCall.keys.firstOrNull { it.state == Call.STATE_ACTIVE }
             ?: callbackByCall.keys.firstOrNull()
