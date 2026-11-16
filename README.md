@@ -1,8 +1,26 @@
-# S call — Android Dialer (v1.7.3 Adaptive Keypad Preview)
+# S call — Android Dialer (v1.7.4 Bold Call Icons Preview)
 
 **S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal Material 3 interface and the approved light-green S call launcher icon.
 
 [![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
+
+## 🟢🔴🔵 Latest — S call v1.7.4 Bold Call Direction Icons
+
+**[⬇️ Direct APK — S call v1.7.4](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.4-preview/S-call.apk)**
+
+**[📦 ZIP backup](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.4-preview/S-call-v1.7.4-install-package.zip)**
+
+**[Official GitHub v1.7.4 release](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.7.4-preview)**
+
+- **Incoming: Dark Green `#006B3E`**, **Missed: Dark Red `#A8172B`**, **Outgoing: Dark Blue `#164B9F`** for excellent visibility on Light Theme.
+- Thicker hand-drawn rounded direction arrows, increased icon sizes, bordered avatar badges and bold call-type labels.
+- Directions are also identified by distinct arrow shapes and words, not color alone.
+- Stronger filters on the Call History screen; the improved adaptive keypad, SIM controls, photo editor and mint-green launcher icon remain intact.
+- The three light-theme colors have >6:1 contrast on white, verified with unit tests. Android lint and APK compilation are verified in CI.
+
+**Testing status:** Debug-signed preview. Automated checks pass; physical SIM/cellular and incoming-call lock-screen behavior still needs device validation.
+
+## Previous version — v1.7.3
 
 ## ⌨️ Latest — S call v1.7.3 Full-height Keypad
 
