@@ -1,8 +1,27 @@
-# S call — Android Dialer (v1.7.7 Call Screen Recovery Preview)
+# S call — Android Dialer (v1.8.0 Premium Audio Routing Preview)
 
 **S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal Material 3 interface and the approved light-green S call launcher icon.
 
 [![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
+
+## 🎧 Latest — S call v1.8.0 Premium Audio Routing
+
+**[⬇️ Download v1.8.0 Android APK](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.8.0-preview/S-call.apk)**
+
+**[📦 ZIP download backup](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.8.0-preview/S-call-v1.8.0-install-package.zip)**
+
+**[Official GitHub Release](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.8.0-preview)**
+
+- **Improved audio switching:** in-call output selector for earpiece, wired, Bluetooth and speakerphone, showing only routes reported by Android.
+- **Android 14+:** modern Telecom endpoint events and route requests; Android 6–13 retains compatible routing APIs.
+- **Safer speaker fallback:** prefers connected wired earphones when turning speakerphone off.
+- **Voice quality information:** settings display detected device AEC/NS/AGC capabilities **for future app-controlled VoIP only**.
+- **Truthful status:** S call does not claim unsupported "AI noise cancellation" or guaranteed HD Voice for ordinary SIM/cellular calls.
+- **Preserves** all prior dialer, photo, SIM, notification, keypad, light/dark UI, and call history features.
+
+**Testing:** Unit tests, Android Lint and debug APK build pass. Real carrier audio clarity, microphone DSP and physical headset switching are **not tested**. Debug-signed preview, not a Play Store release.
+
+## Previous release — v1.7.7
 
 ## 📞 Latest — S call v1.7.7 Answered Call Screen Recovery
 
