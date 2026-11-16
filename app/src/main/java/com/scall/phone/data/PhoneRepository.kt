@@ -230,7 +230,8 @@ internal class PhoneRepository(private val context: Context) {
         val dialedNumber = number.trim()
         require(dialedNumber.isNotBlank()) { "Enter a phone number" }
         if (!isDefaultDialer()) throw IllegalStateException("S Caller is no longer the default Phone app")
-        if (!hasCallPermission()) throw SecurityException("Call permission not granted")
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) !=
+            PackageManager.PERMISSION_GRANTED) throw SecurityException("Call permission not granted")
         val telecom = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
             ?: throw IllegalStateException("Android Telecom is unavailable")
         val extras = Bundle().apply {
