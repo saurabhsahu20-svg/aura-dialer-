@@ -53,10 +53,10 @@ internal class PhoneRepository(private val context: Context) {
     fun hasCellularTelephony(): Boolean =
         context.packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY)
 
-    fun isDefaultDialer(): Boolean {
+    fun isDefaultDialer(): Boolean = try {
         val manager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
-        return manager?.defaultDialerPackage == context.packageName
-    }
+        manager?.defaultDialerPackage == context.packageName
+    } catch (_: RuntimeException) { false }
 
     suspend fun contacts(): List<ContactEntry> = withContext(Dispatchers.IO) {
         if (!hasContactsPermission()) return@withContext emptyList()
@@ -86,7 +86,10 @@ internal class PhoneRepository(private val context: Context) {
                     list += ContactEntry(id, name, number, cursor.getString(3), cursor.getInt(4) == 1)
                 }
             }
-        } catch (_: SecurityException) { /* User can revoke access at any time. */ }
+        } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            android.util.Log.w("SCall", "Contacts provider unavailable", error)
+        }
         list
     }
 
@@ -116,7 +119,10 @@ internal class PhoneRepository(private val context: Context) {
                     )
                 }
             }
-        } catch (_: SecurityException) { }
+        } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            android.util.Log.w("SCall", "Call history provider unavailable", error)
+        }
         recent
     }
 
@@ -158,7 +164,11 @@ internal class PhoneRepository(private val context: Context) {
                 if (cursor.moveToFirst()) ContactEntry(cursor.getLong(0), cursor.getString(1) ?: number,
                     number, cursor.getString(2), false) else null
             }
-        } catch (_: SecurityException) { null }
+        } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            android.util.Log.w("SCall", "Caller lookup unavailable", error)
+            null
+        }
     }
 
     /** Real Telecom call-capable accounts; never assume list order equals physical SIM slot. */
@@ -215,28 +225,18 @@ internal class PhoneRepository(private val context: Context) {
         else SubscriptionManager.INVALID_SUBSCRIPTION_ID
     } catch (_: Exception) { SubscriptionManager.INVALID_SUBSCRIPTION_ID }
 
-    /** Always use TelecomManager for calls from the default dialer. */
+    /** Only Android Telecom places calls: never bounce ACTION_DIAL into our own Activity. */
     fun placeCall(number: String, account: PhoneAccountHandle? = null) {
-        if (number.isBlank()) return
-        val uri = Uri.fromParts("tel", number, null)
+        val dialedNumber = number.trim()
+        require(dialedNumber.isNotBlank()) { "Enter a phone number" }
+        if (!isDefaultDialer()) throw IllegalStateException("S Caller is no longer the default Phone app")
+        if (!hasCallPermission()) throw SecurityException("Call permission not granted")
         val telecom = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
             ?: throw IllegalStateException("Android Telecom is unavailable")
-        if (isDefaultDialer() && hasCallPermission()) {
-            val extras = Bundle().apply {
-                if (account != null) putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, account)
-            }
-            try {
-                telecom.placeCall(uri, extras)
-                return
-            } catch (error: SecurityException) {
-                // Do not issue ACTION_DIAL here: when S call is the default it
-                // would resolve back to this same activity.
-                throw error
-            }
+        val extras = Bundle().apply {
+            if (account != null) putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, account)
         }
-        context.startActivity(Intent(Intent.ACTION_DIAL, uri).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        })
+        telecom.placeCall(Uri.fromParts("tel", dialedNumber, null), extras)
     }
 
     fun openSms(number: String, requestedSubscriptionId: Int? = null) {
