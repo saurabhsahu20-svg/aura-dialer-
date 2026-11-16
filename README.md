@@ -1,8 +1,27 @@
-# S call — Android Dialer (v1.7.4 Bold Call Icons Preview)
+# S call — Android Dialer (v1.7.5 Incoming Call Screen Fix)
 
 **S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal Material 3 interface and the approved light-green S call launcher icon.
 
 [![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
+
+## 📞 Latest — S call v1.7.5 Incoming Call Screen Fix
+
+**[⬇️ Download S call v1.7.5 APK](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.5-preview/S-call.apk)**
+
+**[📦 ZIP download backup](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.5-preview/S-call-v1.7.5-install-package.zip)**
+
+**[Official GitHub Release](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.7.5-preview)**
+
+- Corrects a **ringtone-only incoming-call issue**: the call notification refreshes when Telecom changes the call into RINGING state.
+- Proper high-priority **CallStyle** incoming alert provides **Answer** and **Decline** controls and Android-managed full-screen visibility.
+- **S call → Settings → Incoming call display → Fix** checks default-phone role, notification settings, channel, and Android 14+ full-screen permission.
+- Call screen displays **PHONE IS RINGING** and readable caller information.
+- Prior light-green icon, bold call symbols, adaptive keypad, smooth slider, SIM selection, history editor and Back navigation are retained.
+- Android unit tests and Lint verify the code. Real-device incoming cellular calls still require physical testing.
+
+**Android note:** Unlocked devices normally show heads-up call alerts; locked/off-screen devices may show the full-screen call UI, depending on user/system permissions.
+
+## Previous release — v1.7.4
 
 ## 🟢🔴🔵 Latest — S call v1.7.4 Bold Call Direction Icons
 

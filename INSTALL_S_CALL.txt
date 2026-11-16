@@ -1,13 +1,13 @@
-S CALL v1.7.4 PREVIEW — INSTALL GUIDE
+S CALL v1.7.5 PREVIEW — INSTALL GUIDE
 
 Official download page:
-https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.7.4-preview
+https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.7.5-preview
 
 DIRECT APK DOWNLOAD:
-https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.4-preview/S-call.apk
+https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.5-preview/S-call.apk
 
 ZIP FALLBACK:
-https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.4-preview/S-call-v1.7.4-install-package.zip
+https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.5-preview/S-call-v1.7.5-install-package.zip
 
 How to download on Android:
 1. Open the official GitHub Release link in Chrome or another browser.
@@ -17,7 +17,7 @@ How to download on Android:
 5. Open S call and grant the required permissions. For in-call features, choose S call as the default Phone app.
 
 If the APK download is blocked:
-1. Try "S-call-v1.7.4-install-package.zip" under Assets.
+1. Try "S-call-v1.7.5-install-package.zip" under Assets.
 2. Open the ZIP in Files, extract it, then use S-call.apk inside it.
 3. The zip includes this install guide and the SHA-256 checksum file.
 
@@ -28,9 +28,24 @@ If you receive "App not installed" or a signature/certificate conflict:
 - If the error persists, check available storage and Android compatibility.
 
 App package: com.scall.phone
-Version: 1.7.4 (version code 14)
+Version: 1.7.5 (version code 15)
 Android: 8.0 or newer
 Build type: DEBUG-SIGNED PREVIEW
 This is for testing, not a validated Play Store build. Real-device calling, SIM switching, and incoming-call UI still need testing. Keep the phone's built-in dialer available especially for emergency calling.
 
 Never disable Android protection system-wide to install this app. Download only from the repository's official Release page.
+
+IMPORTANT: HOW TO FIX A RINGING CALL WITH NO VISIBLE CALL SCREEN
+
+1. Open S call > Settings > Incoming call display.
+2. Tap Fix if any requirement is missing.
+3. Make S call the DEFAULT PHONE APP in Android Settings.
+4. Open Settings > Apps > S call > Notifications and allow its phone-call notifications.
+5. On Android 14+ (if asked), allow Full-screen notifications in Special app access > Full-screen intents for S call.
+6. Confirm the Phone calls notification channel is allowed and can pop on screen.
+7. Test an incoming call while your phone is unlocked (heads-up alert) and again when locked (full call screen when allowed).
+
+Android deliberately decides whether to show a heads-up call alert or the full-screen activity;
+a third-party dialer cannot override system or user-disabled notification permissions.
+This preview APK has NOT been validated with a real carrier incoming call. Keep the stock
+Phone app available, especially for emergency calling.
