@@ -19,6 +19,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.scall.phone.data.RecordingStore
+import com.scall.phone.data.PhoneRepository
+import com.scall.phone.data.normalizeNumber
 import com.scall.phone.data.SavedRecording
 import com.scall.phone.data.canAutomaticallyRecordCellularCalls
 import kotlinx.coroutines.launch
@@ -34,6 +36,8 @@ import java.util.Date
 internal fun RecordingSettingsScreen() {
     val context = LocalContext.current
     val store = remember { RecordingStore(context.applicationContext) }
+    val repository = remember { PhoneRepository(context.applicationContext) }
+    var contactsByNumber by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     val scope = rememberCoroutineScope()
     var recordings by remember { mutableStateOf<List<SavedRecording>>(emptyList()) }
     var search by remember { mutableStateOf("") }
@@ -47,12 +51,14 @@ internal fun RecordingSettingsScreen() {
     var retentionMenu by remember { mutableStateOf(false) }
     var cleanupConfirm by remember { mutableStateOf(false) }
     var playingId by remember { mutableStateOf<String?>(null) }
+    var paused by remember { mutableStateOf(false) }
     var player by remember { mutableStateOf<MediaPlayer?>(null) }
 
     fun stopPlayback() {
         val active = player
         player = null
         playingId = null
+        paused = false
         runCatching { active?.stop() }
         runCatching { active?.release() }
     }
@@ -64,7 +70,11 @@ internal fun RecordingSettingsScreen() {
         }
     }
 
-    LaunchedEffect(refresh) { recordings = store.all() }
+    LaunchedEffect(refresh) {
+        recordings = store.all()
+        contactsByNumber = repository.contacts()
+            .associate { normalizeNumber(it.number).takeLast(10) to it.name }
+    }
 
     val importPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -90,7 +100,12 @@ internal fun RecordingSettingsScreen() {
 
     fun playOrPause(recording: SavedRecording) {
         if (playingId == recording.id) {
-            stopPlayback()
+            try {
+                if (paused) player?.start() else player?.pause()
+                paused = !paused
+            } catch (_: RuntimeException) {
+                stopPlayback()
+            }
             return
         }
         stopPlayback()
@@ -107,12 +122,14 @@ internal fun RecordingSettingsScreen() {
             }
             mp.setOnCompletionListener {
                 playingId = null
+                paused = false
                 player = null
                 runCatching { mp.release() }
             }
             mp.start()
             player = mp
             playingId = recording.id
+            paused = false
         } catch (_: Exception) {
             runCatching { mp.release() }
             Toast.makeText(context, "Audio playback failed", Toast.LENGTH_LONG).show()
@@ -178,10 +195,11 @@ internal fun RecordingSettingsScreen() {
         val selected = selectedForDelete!!
         AlertDialog(
             onDismissRequest = { selectedForDelete = null },
-            title = { Text("Delete imported recording?") },
+            title = { Text("Delete recording?") },
             text = {
-                Text("Remove ${selected.title} from S call's private library? " +
-                    "This does not delete the original file in your phone's recorder.")
+                Text(if (selected.source == "manual")
+                    "Permanently delete ${selected.title} and its private audio file?"
+                else "Remove ${selected.title} from S Call's library? The original imported file is unchanged.")
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -236,7 +254,7 @@ internal fun RecordingSettingsScreen() {
     ) {
         item {
             Text(
-                "Call Recording",
+                "S Caller · Recordings",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.ExtraBold
             )
@@ -254,10 +272,9 @@ internal fun RecordingSettingsScreen() {
                             fontWeight = FontWeight.Bold)
                     }
                     Text(
-                        "S call is a third-party Android Telecom dialer. Android does not " +
-                            "provide ordinary apps access to both sides of a SIM call. " +
-                            "Automatic incoming/outgoing recording is OFF. " +
-                            "No hidden capture or recording is taking place.",
+                        "Manual recording is available only on Android builds with authorized " +
+                            "two-way cellular audio capture. Standard S Caller APKs do not have " +
+                            "that privilege. Automatic incoming/outgoing recording remains OFF.",
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
@@ -305,7 +322,7 @@ internal fun RecordingSettingsScreen() {
                             modifier = Modifier.size(34.dp))
                         Spacer(Modifier.height(10.dp))
                         Text(
-                            if (search.isBlank()) "No recordings imported yet"
+                            if (search.isBlank()) "No saved recordings yet"
                             else "No matching recordings",
                             fontWeight = FontWeight.SemiBold
                         )
@@ -324,15 +341,22 @@ internal fun RecordingSettingsScreen() {
                     Modifier.fillMaxWidth().padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
-                    Text(item.title, fontWeight = FontWeight.Bold,
+                    val matchedName = contactsByNumber[
+                        normalizeNumber(item.phoneNumber).takeLast(10)
+                    ]?.takeIf { item.phoneNumber.isNotBlank() }
+                    Text(matchedName ?: item.title, fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleMedium)
+                    if (matchedName != null) {
+                        Text(item.title, style = MaterialTheme.typography.bodySmall)
+                    }
                     Text(
                         listOfNotNull(
                             item.phoneNumber.ifBlank { null },
                             DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
                                 .format(Date(item.importedAtMillis)),
                             "${item.durationMillis / 1000}s",
-                            "${item.bytes / 1024} KB"
+                            "${item.bytes / 1024} KB",
+                            if (item.source == "manual") "Manually recorded" else "Imported"
                         ).joinToString("  •  "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -340,10 +364,13 @@ internal fun RecordingSettingsScreen() {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         IconButton(onClick = { playOrPause(item) }) {
                             Icon(
-                                if (playingId == item.id) Icons.Default.Stop
+                                if (playingId == item.id && !paused) Icons.Default.Pause
                                 else Icons.Default.PlayArrow,
-                                contentDescription = if (playingId == item.id) "Stop playback"
-                                else "Play recording"
+                                contentDescription = when {
+                                    playingId == item.id && !paused -> "Pause recording"
+                                    playingId == item.id && paused -> "Resume recording"
+                                    else -> "Play recording"
+                                }
                             )
                         }
                         IconButton(onClick = {
@@ -391,9 +418,9 @@ internal fun RecordingSettingsScreen() {
                         }
                     )
                     Text(
-                        "Audio quality, recording pause/resume and Bluetooth capture " +
-                            "depend on the recording app that created the file. " +
-                            "No HD or two-way recording is claimed by S call.",
+                        "When authorized native recording is supported, S Caller saves AAC audio " +
+                            "in M4A format after manual Stop or call end. Other imported audio " +
+                            "retains its original quality. No unsupported HD claim is made.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
