@@ -58,6 +58,14 @@ class SCallUiSmokeTest {
     }
 
     @Test
+    fun incomingDisplaySettingsAreVisible() {
+        rule.onNodeWithContentDescription("Settings").performClick()
+        rule.onNodeWithText("Incoming call display").assertExists()
+        rule.onNodeWithContentDescription("Back").performClick()
+        rule.onNodeWithText("Call history").assertExists()
+    }
+
+    @Test
     fun simSettingsAccessibleWithoutHomeBanner() {
         rule.onNodeWithContentDescription("SIM and network preferences").performClick()
         rule.onNodeWithText("Detected SIM cards").assertExists()

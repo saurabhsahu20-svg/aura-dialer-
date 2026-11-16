@@ -47,6 +47,8 @@ import com.scall.phone.data.CallRoute
 import com.scall.phone.data.SmsSubscription
 import com.scall.phone.telecom.CallBridge
 import com.scall.phone.telecom.CallUiActivity
+import com.scall.phone.telecom.IncomingCallAccess
+import com.scall.phone.telecom.IncomingCallVisibility
 import com.scall.phone.ui.theme.Blue
 import com.scall.phone.ui.theme.SCallTheme
 import kotlinx.coroutines.Dispatchers
@@ -494,7 +496,23 @@ internal fun SCallApp(
                         logsGranted = repository.hasLogsPermission(),
                         requestDialerRole = requestDialerRole,
                         requestPermissions = requestPermissions,
-                        onSimSettings = { navigateTo("SIM Manager") }
+                        onSimSettings = { navigateTo("SIM Manager") },
+                        incomingAccess = IncomingCallVisibility.access(
+                            context, repository.isDefaultDialer()
+                        ),
+                        onFixIncomingCallDisplay = {
+                            val state = IncomingCallVisibility.access(
+                                context, repository.isDefaultDialer()
+                            )
+                            when (state) {
+                                IncomingCallAccess.NEED_DEFAULT_DIALER -> requestDialerRole()
+                                IncomingCallAccess.NEED_NOTIFICATION_PERMISSION -> {
+                                    requestPermissions()
+                                    IncomingCallVisibility.openSettings(context, state)
+                                }
+                                else -> IncomingCallVisibility.openSettings(context, state)
+                            }
+                        }
                     )
                     page == "SIM Manager" -> SimSettingsScreen(
                         repository = repository,
@@ -544,6 +562,39 @@ internal fun SCallApp(
                                 onRole = requestDialerRole,
                                 onPermission = requestPermissions
                             )
+                        }
+                        if (page == "Recents" && repository.isDefaultDialer()) {
+                            val callAlerts = IncomingCallVisibility.access(
+                                context, defaultDialer = true
+                            )
+                            if (callAlerts != IncomingCallAccess.READY) {
+                                Surface(
+                                    color = scheme.errorContainer,
+                                    shape = RoundedCornerShape(15.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                        .padding(horizontal = 18.dp, vertical = 6.dp)
+                                        .clickable { navigateTo("Settings") }
+                                ) {
+                                    Row(
+                                        Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.NotificationsActive, null,
+                                            tint = scheme.onErrorContainer)
+                                        Spacer(Modifier.width(8.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Text("Incoming call display needs setup",
+                                                color = scheme.onErrorContainer,
+                                                fontWeight = FontWeight.Bold)
+                                            Text("Tap to fix call alerts in Settings",
+                                                color = scheme.onErrorContainer,
+                                                style = MaterialTheme.typography.bodySmall)
+                                        }
+                                        Icon(Icons.Default.ChevronRight, null,
+                                            tint = scheme.onErrorContainer)
+                                    }
+                                }
+                            }
                         }
                         SearchField(value = query, onChange = { query = it })
                         when (page) {
@@ -980,13 +1031,52 @@ private fun SettingsScreen(
     swipeEnabled: Boolean, onSwipeEnabledChanged: (Boolean) -> Unit,
     defaultDialer: Boolean, contactsGranted: Boolean, logsGranted: Boolean,
     requestDialerRole: () -> Unit, requestPermissions: () -> Unit,
-    onSimSettings: () -> Unit
+    onSimSettings: () -> Unit,
+    incomingAccess: IncomingCallAccess,
+    onFixIncomingCallDisplay: () -> Unit
 ) {
     var themeMenu by remember { mutableStateOf(false) }
     LazyColumn(contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Text("Settings", style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 5.dp, vertical = 8.dp)) }
+        item {
+            SettingsCard {
+                ListItem(
+                    leadingContent = {
+                        Icon(Icons.Default.PhoneInTalk, null,
+                            tint = if (incomingAccess == IncomingCallAccess.READY)
+                                MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.error)
+                    },
+                    headlineContent = {
+                        Text("Incoming call display", fontWeight = FontWeight.Bold)
+                    },
+                    supportingContent = {
+                        Text(when (incomingAccess) {
+                            IncomingCallAccess.NEED_DEFAULT_DIALER ->
+                                "Make S call your default Phone app to display incoming calls"
+                            IncomingCallAccess.NEED_NOTIFICATION_PERMISSION ->
+                                "Allow S call notifications, so ringing calls appear on screen"
+                            IncomingCallAccess.NEED_NOTIFICATION_CHANNEL ->
+                                "Enable the Phone calls notification channel"
+                            IncomingCallAccess.NEED_FULL_SCREEN_ACCESS ->
+                                "Allow full-screen alerts in Android settings for locked screen calls"
+                            IncomingCallAccess.READY ->
+                                "Ready: incoming calls appear as heads-up alerts or lock-screen call UI"
+                        })
+                    },
+                    trailingContent = {
+                        if (incomingAccess == IncomingCallAccess.READY) {
+                            Icon(Icons.Default.CheckCircle, "Ready",
+                                tint = MaterialTheme.colorScheme.primary)
+                        } else TextButton(onClick = onFixIncomingCallDisplay) {
+                            Text("Fix")
+                        }
+                    }
+                )
+            }
+        }
         item {
             SettingsCard {
                 ListItem(

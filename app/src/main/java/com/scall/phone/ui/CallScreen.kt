@@ -156,8 +156,10 @@ internal fun CallScreen(call: CallSnapshot?, onClose: () -> Unit) {
                         Call.STATE_HOLDING -> "ON HOLD"
                         else -> "S CALL"
                     },
-                    color = Color.White.copy(alpha = 0.79f),
-                    fontSize = 11.sp, fontWeight = FontWeight.Medium, letterSpacing = 2.1.sp
+                    color = if (incoming) Color(0xFF78FFC3) else Color.White,
+                    fontSize = if (incoming) 17.sp else 13.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = if (incoming) 1.4.sp else 1.7.sp
                 )
             }
             Spacer(Modifier.height(20.dp))
@@ -177,8 +179,11 @@ internal fun CallScreen(call: CallSnapshot?, onClose: () -> Unit) {
             Spacer(Modifier.weight(1f))
             when {
                 incoming -> {
-                    Text("Slide almost to the end  •  or tap an option", color = Color.White.copy(alpha = 0.82f),
-                        fontSize = 12.sp)
+                    Text("☎  PHONE IS RINGING", color = Color(0xFF78FFC3),
+                        fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                    Spacer(Modifier.height(7.dp))
+                    Text("Slide to answer or reject, or tap a button",
+                        color = Color.White.copy(alpha = 0.92f), fontSize = 13.sp)
                     Spacer(Modifier.height(19.dp))
                     IncomingSlideControl(
                         onAnswer = CallBridge::answer,
