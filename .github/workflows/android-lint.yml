@@ -6,6 +6,11 @@ on:
       - .github/workflows/android-lint.yml
       - app/src/main/**
       - app/build.gradle.kts
+  pull_request:
+    paths:
+      - app/src/main/**
+      - app/build.gradle.kts
+      - .github/workflows/android-lint.yml
   workflow_dispatch:
 
 permissions:
