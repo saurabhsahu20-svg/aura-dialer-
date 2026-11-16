@@ -1,6 +1,10 @@
 package com.scall.phone.telecom
 
+import android.os.Build
+import android.os.OutcomeReceiver
 import android.telecom.Call
+import android.telecom.CallEndpoint
+import android.telecom.CallEndpointException
 import android.telecom.CallAudioState
 import android.telecom.InCallService
 import android.telecom.VideoProfile
@@ -18,7 +22,10 @@ internal data class CallSnapshot(
     val speakerOn: Boolean,
     val bluetoothAvailable: Boolean,
     val connectedAtMillis: Long,
-    val accountLabel: String?
+    val accountLabel: String?,
+    val audioRouteLabel: String,
+    val availableAudioRoutes: List<CallAudioRoute>,
+    val audioRouteError: String?
 )
 
 /**
@@ -27,6 +34,10 @@ internal data class CallSnapshot(
  */
 internal object CallBridge {
     private var service: InCallService? = null
+    private var latestEndpoints: List<CallEndpoint> = emptyList()
+    private var latestEndpoint: CallEndpoint? = null
+    private var latestMute: Boolean? = null
+    private var routeError: String? = null
     private val callbacks = linkedMapOf<Call, Call.Callback>()
     private val mutable = MutableStateFlow<CallSnapshot?>(null)
     val current = mutable.asStateFlow()
@@ -41,6 +52,10 @@ internal object CallBridge {
             callbacks.clear()
         }
         service = inCallService
+        latestEndpoints = emptyList()
+        latestEndpoint = null
+        latestMute = null
+        routeError = null
         refreshFromTelecom()
     }
 
@@ -48,6 +63,10 @@ internal object CallBridge {
         // An older binding's onDestroy MUST NOT erase the current call.
         if (!isCurrentTelecomBinding(service, inCallService)) return
         service = null
+        latestEndpoints = emptyList()
+        latestEndpoint = null
+        latestMute = null
+        routeError = null
         callbacks.toMap().forEach { (call, callback) ->
             call.unregisterCallback(callback)
         }
@@ -107,7 +126,45 @@ internal object CallBridge {
             return
         }
         val details = call.details
-        val audio = service?.callAudioState
+        @Suppress("DEPRECATION")
+        val audio = try { service?.callAudioState } catch (_: Exception) { null }
+        val modern = Build.VERSION.SDK_INT >= 34
+        val endpoint = if (modern) latestEndpoint ?: try { service?.currentCallEndpoint }
+            catch (_: Exception) { null }
+            else null
+        val routes = if (modern) {
+            latestEndpoints.map { option ->
+                CallAudioRoute(
+                    key = "modern:${option.identifier}",
+                    title = option.name.toString().ifBlank { "Audio device" },
+                    kind = when (option.endpointType) {
+                        CallEndpoint.TYPE_EARPIECE -> "earpiece"
+                        CallEndpoint.TYPE_WIRED_HEADSET -> "wired"
+                        CallEndpoint.TYPE_BLUETOOTH -> "bluetooth"
+                        CallEndpoint.TYPE_SPEAKER -> "speaker"
+                        CallEndpoint.TYPE_STREAMING -> "streaming"
+                        else -> "other"
+                    }
+                )
+            }
+        } else legacyAudioRoutes(audio?.supportedRouteMask ?: 0)
+        val activeKind = if (modern) when (endpoint?.endpointType) {
+            CallEndpoint.TYPE_EARPIECE -> "earpiece"
+            CallEndpoint.TYPE_WIRED_HEADSET -> "wired"
+            CallEndpoint.TYPE_BLUETOOTH -> "bluetooth"
+            CallEndpoint.TYPE_SPEAKER -> "speaker"
+            CallEndpoint.TYPE_STREAMING -> "streaming"
+            else -> "other"
+        } else when (audio?.route) {
+            CallAudioState.ROUTE_EARPIECE -> "earpiece"
+            CallAudioState.ROUTE_WIRED_HEADSET -> "wired"
+            CallAudioState.ROUTE_BLUETOOTH -> "bluetooth"
+            CallAudioState.ROUTE_SPEAKER -> "speaker"
+            else -> "other"
+        }
+        val routeLabel = if (modern) endpoint?.name?.toString()?.takeIf { it.isNotBlank() }
+            ?: routeKindLabel(activeKind)
+            else routeKindLabel(activeKind)
         val earlier = mutable.value
         val connecting = call.state == Call.STATE_ACTIVE
         val accountLabel = try {
@@ -122,15 +179,19 @@ internal object CallBridge {
             canHold = details.can(Call.Details.CAPABILITY_HOLD),
             canAddCall = service?.canAddCall() == true,
             canMerge = details.can(Call.Details.CAPABILITY_MERGE_CONFERENCE),
-            isMuted = audio?.isMuted ?: false,
-            speakerOn = audio?.route == CallAudioState.ROUTE_SPEAKER,
-            bluetoothAvailable = (audio?.supportedRouteMask ?: 0) and CallAudioState.ROUTE_BLUETOOTH != 0,
+            isMuted = if (modern) latestMute ?: audio?.isMuted ?: false
+                else audio?.isMuted ?: false,
+            speakerOn = activeKind == "speaker",
+            bluetoothAvailable = routes.any { it.kind == "bluetooth" },
             connectedAtMillis = if (connecting) {
                 details.connectTimeMillis.takeIf { it > 0 }
                     ?: earlier?.connectedAtMillis?.takeIf { it > 0 }
                     ?: System.currentTimeMillis()
             } else 0L,
-            accountLabel = accountLabel
+            accountLabel = accountLabel,
+            audioRouteLabel = routeLabel,
+            availableAudioRoutes = routes,
+            audioRouteError = routeError
         )
     }
 
@@ -161,14 +222,118 @@ internal object CallBridge {
         })
     }
 
-    fun toggleMute() { service?.setMuted(!(mutable.value?.isMuted ?: false)) }
-
-    fun toggleSpeaker() {
-        val enable = !(mutable.value?.speakerOn ?: false)
-        service?.setAudioRoute(if (enable) CallAudioState.ROUTE_SPEAKER else CallAudioState.ROUTE_EARPIECE)
+    fun toggleMute() {
+        val state = mutable.value ?: return
+        try {
+            service?.setMuted(!state.isMuted)
+        } catch (_: Exception) {
+            routeError = "Unable to change microphone mute; try again"
+            refresh()
+        }
     }
 
-    fun selectBluetooth() { service?.setAudioRoute(CallAudioState.ROUTE_BLUETOOTH) }
+    /**
+     * Use Android Telecom rather than AudioManager: the OS owns the cellular
+     * microphone, audio focus, Bluetooth profile and speaker routing.
+     */
+    fun changeAudioRoute(key: String) {
+        val owner = service ?: return
+        val state = mutable.value ?: return
+        if (state.availableAudioRoutes.none { it.key == key }) {
+            routeError = "This audio device disconnected. Choose another."
+            refresh()
+            return
+        }
+        routeError = null
+        if (Build.VERSION.SDK_INT >= 34) {
+            val endpoint = latestEndpoints.firstOrNull {
+                key == "modern:${it.identifier}"
+            }
+            if (endpoint == null) {
+                routeError = "Audio route not ready. Try again."
+                refresh()
+                return
+            }
+            try {
+                owner.requestCallEndpointChange(
+                    endpoint, owner.mainExecutor,
+                    object : OutcomeReceiver<Void, CallEndpointException> {
+                        override fun onResult(result: Void?) {
+                            routeError = null
+                            refresh()
+                        }
+                        override fun onError(error: CallEndpointException) {
+                            routeError = "Audio route switch failed. Try another output."
+                            refresh()
+                        }
+                    }
+                )
+            } catch (_: Exception) {
+                routeError = "Unable to switch audio. Try another output."
+            }
+        } else {
+            val choice = state.availableAudioRoutes.firstOrNull { it.key == key }
+            val route = when (choice?.kind) {
+                "earpiece" -> CallAudioState.ROUTE_EARPIECE
+                "wired" -> CallAudioState.ROUTE_WIRED_HEADSET
+                "bluetooth" -> CallAudioState.ROUTE_BLUETOOTH
+                "speaker" -> CallAudioState.ROUTE_SPEAKER
+                else -> null
+            }
+            if (route != null) {
+                try {
+                    @Suppress("DEPRECATION")
+                    owner.setAudioRoute(route)
+                } catch (_: Exception) {
+                    routeError = "Unable to switch audio. Try another output."
+                }
+            }
+        }
+        refresh()
+    }
+
+    fun toggleSpeaker() {
+        val state = mutable.value ?: return
+        val destination = if (state.speakerOn) nonSpeakerFallback(state.availableAudioRoutes)
+            else state.availableAudioRoutes.firstOrNull { it.kind == "speaker" }
+        if (destination != null) changeAudioRoute(destination.key)
+        else {
+            routeError = "No supported audio output is available"
+            refresh()
+        }
+    }
+
+    fun selectBluetooth() {
+        val destination = mutable.value?.availableAudioRoutes
+            ?.firstOrNull { it.kind == "bluetooth" }
+        if (destination != null) changeAudioRoute(destination.key)
+        else {
+            routeError = "Connect a Bluetooth headset to use Bluetooth audio"
+            refresh()
+        }
+    }
+
+    fun clearAudioRouteError() {
+        routeError = null
+        refresh()
+    }
+
+    fun updateAvailableEndpoints(endpoints: List<CallEndpoint>) {
+        latestEndpoints = endpoints.toList()
+        routeError = null
+        refresh()
+    }
+
+    fun updateSelectedEndpoint(endpoint: CallEndpoint) {
+        latestEndpoint = endpoint
+        routeError = null
+        refresh()
+    }
+
+    fun updateMutedState(muted: Boolean) {
+        latestMute = muted
+        refresh()
+    }
 
     fun dtmf(digit: Char) {
         primaryCall()?.let { call ->
