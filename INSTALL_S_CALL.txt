@@ -1,13 +1,13 @@
-S CALL v1.7.5 PREVIEW — INSTALL GUIDE
+S CALL v1.7.6 PREVIEW — INSTALL GUIDE
 
 Official download page:
-https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.7.5-preview
+https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.7.6-preview
 
 DIRECT APK DOWNLOAD:
-https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.5-preview/S-call.apk
+https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.6-preview/S-call.apk
 
 ZIP FALLBACK:
-https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.5-preview/S-call-v1.7.5-install-package.zip
+https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.6-preview/S-call-v1.7.6-install-package.zip
 
 How to download on Android:
 1. Open the official GitHub Release link in Chrome or another browser.
@@ -17,7 +17,7 @@ How to download on Android:
 5. Open S call and grant the required permissions. For in-call features, choose S call as the default Phone app.
 
 If the APK download is blocked:
-1. Try "S-call-v1.7.5-install-package.zip" under Assets.
+1. Try "S-call-v1.7.6-install-package.zip" under Assets.
 2. Open the ZIP in Files, extract it, then use S-call.apk inside it.
 3. The zip includes this install guide and the SHA-256 checksum file.
 
@@ -28,8 +28,8 @@ If you receive "App not installed" or a signature/certificate conflict:
 - If the error persists, check available storage and Android compatibility.
 
 App package: com.scall.phone
-Version: 1.7.5 (version code 15)
-Android: 8.0 or newer
+Version: 1.7.6 (version code 16)
+Android: 6.0 or newer (API 23+)
 Build type: DEBUG-SIGNED PREVIEW
 This is for testing, not a validated Play Store build. Real-device calling, SIM switching, and incoming-call UI still need testing. Keep the phone's built-in dialer available especially for emergency calling.
 
@@ -49,3 +49,12 @@ Android deliberately decides whether to show a heads-up call alert or the full-s
 a third-party dialer cannot override system or user-disabled notification permissions.
 This preview APK has NOT been validated with a real carrier incoming call. Keep the stock
 Phone app available, especially for emergency calling.
+
+CROSS-VERSION INSTALL SUPPORT
+- Android 6.0+ (Marshmallow and newer) is the minimum supported OS.
+- Android 5.x and earlier: unsupported because the InCallService API is unavailable.
+- Android 6 and 7: no notification channels; incoming call notifications use Android-compatible legacy alerts.
+- Android 8+: use the Phone calls notification channel.
+- Android 13+: allow Notifications; Android 14+: check Full-screen call alerts.
+- Cellular calls require compatible telephony hardware and default-phone-role permission.
+- Android phones and manufacturers may differ even on the same OS version.

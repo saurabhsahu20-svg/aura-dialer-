@@ -1,8 +1,27 @@
-# S call — Android Dialer (v1.7.5 Incoming Call Screen Fix)
+# S call — Android Dialer (v1.7.6 Android 6+ Compatibility Preview)
 
 **S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal Material 3 interface and the approved light-green S call launcher icon.
 
 [![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
+
+## 📱 Latest — S call v1.7.6 Wider Android Compatibility
+
+**[⬇️ Direct APK — Android 6.0+ compatible](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.6-preview/S-call.apk)**
+
+**[📦 ZIP backup](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.7.6-preview/S-call-v1.7.6-install-package.zip)**
+
+**[Official GitHub v1.7.6 Release](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.7.6-preview)**
+
+- Supports **Android 6.0 (API 23) and newer**, compared with the old Android 8+ minimum.
+- Legacy phone-call notification fallback on Android 6/7; Android 8+ channel behavior retained.
+- Android 6 avoids unsupported SIM-default APIs; cross-version guards prevent common compatibility crashes.
+- Devices without cellular hardware show a safe message instead of attempting a real call.
+- Cross-version UI smoke tests run on Android 6, 8 and 15, plus existing Android 10 emulator checks.
+- Preserves incoming-call alerts, SIM preferences, responsive keypad and dark/light themes.
+
+**Limitations:** No Android 5 or earlier, and no universal guarantee for every manufacturer's ROM, carrier or SIM. This is a debug-signed preview; test with your actual phone before using S call as your main dialer.
+
+## Previous preview — v1.7.5
 
 ## 📞 Latest — S call v1.7.5 Incoming Call Screen Fix
 
