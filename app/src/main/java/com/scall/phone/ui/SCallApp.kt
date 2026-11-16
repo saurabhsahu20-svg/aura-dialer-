@@ -506,10 +506,8 @@ internal fun SCallApp(
                             )
                             when (state) {
                                 IncomingCallAccess.NEED_DEFAULT_DIALER -> requestDialerRole()
-                                IncomingCallAccess.NEED_NOTIFICATION_PERMISSION -> {
-                                    requestPermissions()
+                                IncomingCallAccess.NEED_NOTIFICATION_PERMISSION ->
                                     IncomingCallVisibility.openSettings(context, state)
-                                }
                                 else -> IncomingCallVisibility.openSettings(context, state)
                             }
                         }
