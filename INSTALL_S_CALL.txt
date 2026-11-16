@@ -1,13 +1,13 @@
-S CALL v1.8.1 PREVIEW — INSTALL GUIDE
+S CALL v1.8.2 PREVIEW — INSTALL GUIDE
 
 Official download page:
-https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.8.1-preview
+https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.8.2-preview
 
 DIRECT APK DOWNLOAD:
-https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.8.1-preview/S-call.apk
+https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.8.2-preview/S-call.apk
 
 ZIP FALLBACK:
-https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.8.1-preview/S-call-v1.8.1-install-package.zip
+https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.8.2-preview/S-call-v1.8.2-install-package.zip
 
 How to download on Android:
 1. Open the official GitHub Release link in Chrome or another browser.
@@ -17,7 +17,7 @@ How to download on Android:
 5. Open S call and grant the required permissions. For in-call features, choose S call as the default Phone app.
 
 If the APK download is blocked:
-1. Try "S-call-v1.8.1-install-package.zip" under Assets.
+1. Try "S-call-v1.8.2-install-package.zip" under Assets.
 2. Open the ZIP in Files, extract it, then use S-call.apk inside it.
 3. The zip includes this install guide and the SHA-256 checksum file.
 
@@ -28,7 +28,7 @@ If you receive "App not installed" or a signature/certificate conflict:
 - If the error persists, check available storage and Android compatibility.
 
 App package: com.scall.phone
-Version: 1.8.1 (version code 19)
+Version: 1.8.2 (version code 20)
 Android: 6.0 or newer (API 23+)
 Build type: DEBUG-SIGNED PREVIEW
 This is for testing, not a validated Play Store build. Real-device calling, SIM switching, and incoming-call UI still need testing. Keep the phone's built-in dialer available especially for emergency calling.
@@ -59,7 +59,7 @@ CROSS-VERSION INSTALL SUPPORT
 - Cellular calls require compatible telephony hardware and default-phone-role permission.
 - Android phones and manufacturers may differ even on the same OS version.
 
-INCOMING CALL RECOVERY UPDATE v1.8.1
+INCOMING CALL RECOVERY UPDATE v1.8.2
 - Tap Answer from the S call notification; Android should open the call screen directly.
 - If Android Telecom reports no active call, S call shows "Phone service not connected"
   and a Retry button instead of spinning indefinitely.
@@ -68,7 +68,7 @@ INCOMING CALL RECOVERY UPDATE v1.8.1
 - If it still fails, capture a screenshot from the call screen and report your phone's Android version.
 - Do not rely on an unvalidated preview dialer for emergency calls.
 
-S CALL v1.8.1 — AUDIO ROUTING & VOICE QUALITY
+S CALL v1.8.2 — AUDIO ROUTING & VOICE QUALITY
 
 During a connected call, tap "Audio" to select only the wired headset,
 Bluetooth device, phone earpiece, or speaker currently reported by Android.
@@ -84,7 +84,7 @@ Real SIM audio quality depends on phone hardware, network and carrier.
 
 Keep the stock phone app available for emergency calls.
 
-CALL RECORDING LIBRARY — v1.8.1
+CALL RECORDING LIBRARY — v1.8.2
 Open S call > Settings > Call Recording.
 - Standard SIM automatic incoming/outgoing recording is NOT supported by S call.
 - If your built-in dialer has recorded a call with proper notice/consent,
@@ -94,3 +94,12 @@ Open S call > Settings > Call Recording.
 - Optional cleanup (30/90 days) runs only when you choose Clean up and confirm.
 - No hidden microphone, live two-way call capture, VoIP recorder or AI recording exists.
 - Export important files before uninstalling (app-private copies are removed).
+
+RECORDED AUDIO LIBRARY — VERSION 1.8.2
+Settings > Call Recording > Import.
+The Import control is now positioned near the top of the page.
+Choose only audio for which the participants have given appropriate notice/consent.
+The Android system picker does not grant S call permission to record live SIM calls.
+Find recordings using Search; Play, Stop, Rename, Share or Delete imported copies.
+Cleanup is manual and requires explicit confirmation. Export important copies before uninstall.
+Automatic SIM-call recording is NOT supported, and no AI/call capture is active.
