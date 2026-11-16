@@ -136,7 +136,7 @@ internal object CallBridge {
             latestEndpoints.map { option ->
                 CallAudioRoute(
                     key = "modern:${option.identifier}",
-                    title = option.name.toString().ifBlank { "Audio device" },
+                    title = option.endpointName.toString().ifBlank { "Audio device" },
                     kind = when (option.endpointType) {
                         CallEndpoint.TYPE_EARPIECE -> "earpiece"
                         CallEndpoint.TYPE_WIRED_HEADSET -> "wired"
@@ -162,7 +162,7 @@ internal object CallBridge {
             CallAudioState.ROUTE_SPEAKER -> "speaker"
             else -> "other"
         }
-        val routeLabel = if (modern) endpoint?.name?.toString()?.takeIf { it.isNotBlank() }
+        val routeLabel = if (modern) endpoint?.endpointName?.toString()?.takeIf { it.isNotBlank() }
             ?: routeKindLabel(activeKind)
             else routeKindLabel(activeKind)
         val earlier = mutable.value
