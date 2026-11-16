@@ -46,7 +46,7 @@ internal object CallBridge {
 
     fun unbind(inCallService: InCallService) {
         // An older binding's onDestroy MUST NOT erase the current call.
-        if (service !== inCallService) return
+        if (!isCurrentTelecomBinding(service, inCallService)) return
         service = null
         callbacks.toMap().forEach { (call, callback) ->
             call.unregisterCallback(callback)
