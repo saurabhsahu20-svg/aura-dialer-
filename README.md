@@ -1,10 +1,22 @@
-# S call — Android Dialer (v1.8.2 Verified Recording Library Preview)
+# S Caller — Android Dialer (v1.8.9 No-Recording Preview)
 
 **S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal Material 3 interface and the approved light-green S call launcher icon.
 
 [![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
 
-## 🎙️ Latest — S call v1.8.2 Verified Recording Library
+## 📞 Current release — S Caller v1.8.9 (No Recording)
+
+**[Download the latest public developer preview](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.8.9-preview)**
+
+This release **completely removes automatic and manual recording** (Record button, recording library/settings, microphone permission, recording service and import/share provider). It retains real phone calling, contacts, call history, SIM selection, incoming-call controls and audio routing.
+
+**Important for previous users:** No existing private recording files are erased automatically by this update, but the new app has no recording library screen. Export anything you need using the previous version **before upgrading**, and back up your data before uninstalling: uninstalling can erase private files. A CI debug-signed APK may not install over an APK signed with a different certificate.
+
+Verified in GitHub CI by build, unit tests, Android lint and emulator UI checks; **real SIM calling on every device is not guaranteed**. This is a developer prerelease, not a production-signed Play Store release. Keep another working dialer available.
+
+## Older release notes (archive)
+
+## 🎙️ Archived — S call v1.8.2 Verified Recording Library
 
 ### **[⬇️ Download v1.8.2 APK](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.8.2-preview/S-call.apk)**
 
