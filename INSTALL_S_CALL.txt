@@ -1,105 +1,43 @@
-S CALL v1.8.2 PREVIEW — INSTALL GUIDE
+S CALLER v1.8.9 — NO-RECORDING DEVELOPER PREVIEW
+==================================================
 
-Official download page:
-https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.8.2-preview
+PUBLIC DOWNLOAD:
+https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.8.9-preview
 
-DIRECT APK DOWNLOAD:
-https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.8.2-preview/S-call.apk
+In Assets, download S-Caller-v1.8.9-preview.apk.
+The SHA256SUMS.txt file is available to verify download integrity.
 
-ZIP FALLBACK:
-https://github.com/saurabhsahu20-svg/aura-dialer-/releases/download/v1.8.2-preview/S-call-v1.8.2-install-package.zip
+WHAT CHANGED
+- Automatic call recording is REMOVED.
+- Manual call recording is REMOVED.
+- The Record button, recording library, recording service, microphone permission,
+  recording notifications and file-sharing provider are REMOVED.
+- Normal phone calling, keypad, dual-SIM selection, contacts, call history,
+  speaker/Bluetooth audio routing and incoming calls remain available.
+- Caller photo/contact provider error handling is improved.
 
-How to download on Android:
-1. Open the official GitHub Release link in Chrome or another browser.
-2. Under Assets, tap "S-call.apk". Wait for your browser download to finish.
-3. Open Files / Downloads on your phone and tap S-call.apk.
-4. Android may ask you to allow installation from your browser or file manager. Only proceed if you trust this APK from your own GitHub repository.
-5. Open S call and grant the required permissions. For in-call features, choose S call as the default Phone app.
+IMPORTANT: OLD PRIVATE RECORDINGS
+- This update does NOT delete previous private recording files by itself.
+- The new app no longer has a screen to open/export those old files.
+- If you need them, export/share from the previous installed version FIRST.
+- Uninstalling or clearing app storage may permanently erase private recordings,
+  settings or caller photo preferences. Back up important content before replacing.
+- GitHub CI preview APKs are debug-signed and may have different certificates;
+  Android will not update an existing package with a mismatched signing key.
 
-If the APK download is blocked:
-1. Try "S-call-v1.8.2-install-package.zip" under Assets.
-2. Open the ZIP in Files, extract it, then use S-call.apk inside it.
-3. The zip includes this install guide and the SHA-256 checksum file.
+SETTING UP PHONE CALLING
+1. Install the preview on a supported Android phone (Android 6.0+).
+2. Choose S Caller under Android Settings > Apps > Default apps > Phone.
+3. Allow Phone permissions, Contacts and Call Log access if you want those features.
+4. Enable Phone-call notifications and full-screen call alerts where available.
+5. Test an incoming and outgoing SIM call, speaker, end-call and any dual-SIM choice.
 
-If you receive "App not installed" or a signature/certificate conflict:
-- Earlier GitHub Actions debug builds may have used a different signing key.
-- To replace an existing preview you may have to uninstall it first.
-- IMPORTANT: Save any app-specific data or caller photo preferences before uninstalling. Uninstalling can erase them.
-- If the error persists, check available storage and Android compatibility.
+IF S CALLER KEEPS STOPPING
+- Keep a separate working default Phone app available, especially for emergencies.
+- Capture the Android app crash stack trace (FATAL EXCEPTION) with device model
+  and Android version. A screenshot alone cannot identify the exact crash cause.
+- Android emulator UI tests cannot guarantee success on all real carrier devices.
 
-App package: com.scall.phone
-Version: 1.8.2 (version code 20)
-Android: 6.0 or newer (API 23+)
-Build type: DEBUG-SIGNED PREVIEW
-This is for testing, not a validated Play Store build. Real-device calling, SIM switching, and incoming-call UI still need testing. Keep the phone's built-in dialer available especially for emergency calling.
-
-Never disable Android protection system-wide to install this app. Download only from the repository's official Release page.
-
-IMPORTANT: HOW TO FIX A RINGING CALL WITH NO VISIBLE CALL SCREEN
-
-1. Open S call > Settings > Incoming call display.
-2. Tap Fix if any requirement is missing.
-3. Make S call the DEFAULT PHONE APP in Android Settings.
-4. Open Settings > Apps > S call > Notifications and allow its phone-call notifications.
-5. On Android 14+ (if asked), allow Full-screen notifications in Special app access > Full-screen intents for S call.
-6. Confirm the Phone calls notification channel is allowed and can pop on screen.
-7. Test an incoming call while your phone is unlocked (heads-up alert) and again when locked (full call screen when allowed).
-
-Android deliberately decides whether to show a heads-up call alert or the full-screen activity;
-a third-party dialer cannot override system or user-disabled notification permissions.
-This preview APK has NOT been validated with a real carrier incoming call. Keep the stock
-Phone app available, especially for emergency calling.
-
-CROSS-VERSION INSTALL SUPPORT
-- Android 6.0+ (Marshmallow and newer) is the minimum supported OS.
-- Android 5.x and earlier: unsupported because the InCallService API is unavailable.
-- Android 6 and 7: no notification channels; incoming call notifications use Android-compatible legacy alerts.
-- Android 8+: use the Phone calls notification channel.
-- Android 13+: allow Notifications; Android 14+: check Full-screen call alerts.
-- Cellular calls require compatible telephony hardware and default-phone-role permission.
-- Android phones and manufacturers may differ even on the same OS version.
-
-INCOMING CALL RECOVERY UPDATE v1.8.2
-- Tap Answer from the S call notification; Android should open the call screen directly.
-- If Android Telecom reports no active call, S call shows "Phone service not connected"
-  and a Retry button instead of spinning indefinitely.
-- Check S call is the DEFAULT PHONE APP and grant required phone and alert permissions.
-- Try another real incoming call while the phone is unlocked and locked.
-- If it still fails, capture a screenshot from the call screen and report your phone's Android version.
-- Do not rely on an unvalidated preview dialer for emergency calls.
-
-S CALL v1.8.2 — AUDIO ROUTING & VOICE QUALITY
-
-During a connected call, tap "Audio" to select only the wired headset,
-Bluetooth device, phone earpiece, or speaker currently reported by Android.
-Use "Speaker" for a quick toggle; the app prefers available wired audio
-when switching speakerphone off. Actual selection can still be rejected
-by Android Telecom, and the call screen will show a clear error.
-
-Settings > Voice quality & audio capabilities is an informational check.
-Noise suppression, echo cancellation and automatic gain control
-reported as available are for APP-OWNED VoIP audio sessions only;
-THEY ARE NOT ACTIVE ON REGULAR SIM/CELLULAR CALLS.
-Real SIM audio quality depends on phone hardware, network and carrier.
-
-Keep the stock phone app available for emergency calls.
-
-CALL RECORDING LIBRARY — v1.8.2
-Open S call > Settings > Call Recording.
-- Standard SIM automatic incoming/outgoing recording is NOT supported by S call.
-- If your built-in dialer has recorded a call with proper notice/consent,
-  choose Import and select that audio file using the Android picker.
-- Manage private copies: Search, Play/Stop, Rename, Share and Delete.
-- Your original file in the other app is not deleted when you delete the imported copy.
-- Optional cleanup (30/90 days) runs only when you choose Clean up and confirm.
-- No hidden microphone, live two-way call capture, VoIP recorder or AI recording exists.
-- Export important files before uninstalling (app-private copies are removed).
-
-RECORDED AUDIO LIBRARY — VERSION 1.8.2
-Settings > Call Recording > Import.
-The Import control is now positioned near the top of the page.
-Choose only audio for which the participants have given appropriate notice/consent.
-The Android system picker does not grant S call permission to record live SIM calls.
-Find recordings using Search; Play, Stop, Rename, Share or Delete imported copies.
-Cleanup is manual and requires explicit confirmation. Export important copies before uninstall.
-Automatic SIM-call recording is NOT supported, and no AI/call capture is active.
+RELEASE STATUS
+This is a PUBLIC DEBUG-SIGNED DEVELOPER PREVIEW, not a production-signed stable
+release or a validated Play Store download. No call recording capability exists.

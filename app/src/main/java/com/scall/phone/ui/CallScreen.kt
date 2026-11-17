@@ -1,10 +1,6 @@
 package com.scall.phone.ui
 
-import android.Manifest
-import android.os.SystemClock
 import android.telecom.Call
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -46,9 +42,6 @@ import com.scall.phone.data.PhotoStore
 import com.scall.phone.data.CallerPhotoStyle
 import com.scall.phone.telecom.CallBridge
 import com.scall.phone.telecom.CallSnapshot
-import com.scall.phone.telecom.ManualCallRecording
-import com.scall.phone.telecom.ManualRecordAccess
-import com.scall.phone.telecom.RecordingStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -139,13 +132,28 @@ internal fun CallScreen(
     val number = call?.number.orEmpty()
     var resolvedName by remember(number) { mutableStateOf("") }
     var resolvedPhoto by remember(number) { mutableStateOf<String?>(null) }
-    val photoStyle = remember(number) { store.styleFor(number) }
+    val photoStyle = remember(number) {
+        // A corrupted or unreadable photo preference must never crash live call UI.
+        runCatching { store.styleFor(number) }.getOrDefault(CallerPhotoStyle())
+    }
     LaunchedEffect(number) {
-        // Fetch photos/contact details off the UI thread; the call controls can
-        // be drawn and respond immediately even with a slow contacts provider.
+        // Keep photo/contact provider delays and failures off live call controls.
         val (contact, photo) = withContext(Dispatchers.IO) {
-            val matching = repo.findContact(number)
-            matching to (store.photoFor(number) ?: matching?.photo)
+            val matching = try {
+                repo.findContact(number)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                android.util.Log.w("SCall", "Caller contact lookup unavailable", error)
+                null
+            }
+            val custom = try {
+                store.photoFor(number)
+            } catch (error: Exception) {
+                android.util.Log.w("SCall", "Caller photo lookup unavailable", error)
+                null
+            }
+            matching to (custom ?: matching?.photo)
         }
         resolvedName = contact?.name.orEmpty()
         resolvedPhoto = photo
@@ -153,52 +161,6 @@ internal fun CallScreen(
     val name = resolvedName.ifBlank { call?.displayName?.ifBlank { number.ifBlank { "Unknown caller" } } ?: "S call" }
     val incoming = call?.state == Call.STATE_RINGING
     var keypadOpen by remember { mutableStateOf(false) }
-    val recording by ManualCallRecording.status.collectAsState()
-    var askConsent by remember { mutableStateOf(false) }
-    var explainUnavailable by remember { mutableStateOf(false) }
-
-    val requestMicrophone = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted && call?.state == Call.STATE_ACTIVE) askConsent = true
-        else explainUnavailable = true
-    }
-
-    if (askConsent) {
-        AlertDialog(
-            onDismissRequest = { askConsent = false },
-            icon = { Icon(Icons.Default.Mic, null) },
-            title = { Text("Manual call recording") },
-            text = { Text(
-                "Record only with the knowledge and consent of everyone on the call. " +
-                    "Recording begins only after you tap Start; a visible ongoing notification " +
-                    "and Stop button will remain. Android or your carrier may provide " +
-                    "additional recording notices."
-            ) },
-            confirmButton = {
-                Button(onClick = {
-                    askConsent = false
-                    if (call?.state == Call.STATE_ACTIVE) ManualCallRecording.begin(context)
-                }) { Text("Start recording") }
-            },
-            dismissButton = { TextButton(onClick = { askConsent = false }) { Text("Cancel") } }
-        )
-    }
-    if (explainUnavailable) {
-        AlertDialog(
-            onDismissRequest = { explainUnavailable = false },
-            title = { Text("Cellular recording unavailable") },
-            text = { Text(
-                "This Android build does not provide S Caller authorized access to both " +
-                    "sides of cellular audio. No microphone recording or empty audio file " +
-                    "will be created. If your phone has a built-in, consent-based recorder, " +
-                    "you can import its recordings into S Caller → Recordings."
-            ) },
-            confirmButton = {
-                TextButton(onClick = { explainUnavailable = false }) { Text("OK") }
-            }
-        )
-    }
 
     Box(Modifier.fillMaxSize().background(BackBlue)) {
         CallPhotoBackground(resolvedPhoto, photoStyle)
@@ -289,19 +251,7 @@ internal fun CallScreen(
                     } else {
                         ActiveCallControls(
                             call = call,
-                            onKeypad = { keypadOpen = true },
-                            recording = recording,
-                            onRecord = {
-                                when (ManualCallRecording.access(context, call.state)) {
-                                    ManualRecordAccess.NEED_ACTIVE_CALL,
-                                    ManualRecordAccess.SYSTEM_AUDIO_UNAVAILABLE ->
-                                        explainUnavailable = true
-                                    ManualRecordAccess.NEED_MIC_PERMISSION ->
-                                        requestMicrophone.launch(Manifest.permission.RECORD_AUDIO)
-                                    ManualRecordAccess.AVAILABLE -> askConsent = true
-                                }
-                            },
-                            onStopRecording = { ManualCallRecording.stop(context) }
+                            onKeypad = { keypadOpen = true }
                         )
                     }
                     Spacer(Modifier.height(24.dp))
@@ -473,10 +423,7 @@ private fun IncomingSlideControl(onAnswer: () -> Unit, onDecline: () -> Unit) {
 @Composable
 private fun ActiveCallControls(
     call: CallSnapshot,
-    onKeypad: () -> Unit,
-    recording: RecordingStatus,
-    onRecord: () -> Unit,
-    onStopRecording: () -> Unit
+    onKeypad: () -> Unit
 ) {
     var routePickerOpen by remember { mutableStateOf(false) }
 
@@ -552,55 +499,6 @@ private fun ActiveCallControls(
                 onClick = if (call.canMerge) CallBridge::merge
                     else { { routePickerOpen = true } }
             )
-        }
-        // Never indicate active recording until the recorder actually starts.
-        val started = recording.phase == RecordingStatus.Phase.RECORDING
-        val busy = recording.phase == RecordingStatus.Phase.STARTING ||
-            recording.phase == RecordingStatus.Phase.SAVING
-        var clock by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
-        LaunchedEffect(started, recording.startedElapsedMs) {
-            while (started) {
-                clock = SystemClock.elapsedRealtime()
-                delay(1000)
-            }
-        }
-        val seconds = if (started)
-            ((clock - recording.startedElapsedMs) / 1000).coerceAtLeast(0)
-        else 0L
-        FilledTonalButton(
-            onClick = if (started) onStopRecording else onRecord,
-            enabled = !busy && (started || call.state == Call.STATE_ACTIVE),
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            colors = ButtonDefaults.filledTonalButtonColors(
-                containerColor = if (started) Color(0xFFBB273D) else Color(0xFF173E72),
-                contentColor = Color.White
-            )
-        ) {
-            Icon(if (started) Icons.Default.Stop else Icons.Default.FiberManualRecord, null)
-            Spacer(Modifier.width(8.dp))
-            Text(when (recording.phase) {
-                RecordingStatus.Phase.STARTING -> "Starting recorder…"
-                RecordingStatus.Phase.SAVING -> "Saving recording…"
-                RecordingStatus.Phase.RECORDING ->
-                    "Stop Recording  •  %02d:%02d".format(seconds / 60, seconds % 60)
-                else -> "Record Call"
-            })
-        }
-        if (recording.phase == RecordingStatus.Phase.SAVED) {
-            Text("✓ Recording saved", color = Color(0xFF8DEBCB),
-                fontSize = 12.sp, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth())
-        } else if (recording.phase == RecordingStatus.Phase.ERROR) {
-            Text(recording.message, color = Color(0xFFFFC0C0),
-                fontSize = 12.sp, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth())
-        } else if (!started && !busy &&
-            ManualCallRecording.access(LocalContext.current, call.state) ==
-                ManualRecordAccess.SYSTEM_AUDIO_UNAVAILABLE
-        ) {
-            Text("Recording unavailable for standard SIM calls",
-                color = Color.White.copy(alpha = 0.68f), fontSize = 11.sp,
-                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         }
     }
 }

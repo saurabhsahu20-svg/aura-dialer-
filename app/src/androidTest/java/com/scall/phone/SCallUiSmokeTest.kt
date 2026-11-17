@@ -58,13 +58,14 @@ class SCallUiSmokeTest {
     }
 
     @Test
-    fun callRecordingLibraryShowsTruthfulSupportAndImport() {
+    fun recordingMenusAreGoneAndCallSettingsStillWork() {
+        // Removing unsupported call recording must not remove the real phone settings.
+        rule.onNodeWithContentDescription("Recordings").assertDoesNotExist()
         rule.onNodeWithContentDescription("Settings").performClick()
-        rule.onNodeWithText("Call Recording").performClick()
-        rule.onNodeWithText("Cellular recording: Not available").assertExists()
-        rule.onNodeWithText("Import").assertExists()
-        rule.onNodeWithContentDescription("Back").performClick()
+        rule.onNodeWithText("Call Recording").assertDoesNotExist()
         rule.onNodeWithText("Incoming call display").assertExists()
+        rule.onNodeWithContentDescription("Back").performClick()
+        rule.onNodeWithText("Call history").assertExists()
     }
 
     @Test
