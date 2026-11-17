@@ -329,6 +329,44 @@ internal class ContactManager(private val context: Context) {
         } finally { bitmap.recycle() }
     }
 
+    /**
+     * Export a user-selected text VCF through Android's Storage Access Framework.
+     * Includes supported names, numbers, emails, dates and notes; photos, synced
+     * account metadata and group membership remain managed by Android Contacts.
+     */
+    suspend fun exportBasicVcard(contactIds: List<Long>, target: Uri): Int =
+        withContext(Dispatchers.IO) {
+            if (!canRead()) throw SecurityException("Contacts access is required")
+            fun escape(text: String): String = text.replace("\\", "\\\\")
+                .replace("\n", "\\n").replace(";", "\\;").replace(",", "\\,")
+            var exported = 0
+            val stream = resolver.openOutputStream(target, "wt")
+                ?: throw IllegalStateException("Cannot open the selected backup destination")
+            stream.bufferedWriter(Charsets.UTF_8).use { output ->
+                contactIds.distinct().forEach { id ->
+                    val card = load(id) ?: return@forEach
+                    val allPhones = numbers(id)
+                    if (card.fullName.isBlank() || allPhones.isEmpty()) return@forEach
+                    output.append("BEGIN:VCARD\r\nVERSION:3.0\r\n")
+                    output.append("N:${escape(card.last)};${escape(card.first)};${escape(card.middle)};;\r\n")
+                    output.append("FN:${escape(card.fullName)}\r\n")
+                    allPhones.forEach { item ->
+                        output.append("TEL;TYPE=${if (item.label.equals("Work", true)) "WORK" else "CELL"}:${escape(item.value)}\r\n")
+                    }
+                    card.emails.filter { it.value.isNotBlank() }.forEach { item ->
+                        output.append("EMAIL:${escape(item.value)}\r\n")
+                    }
+                    if (card.company.isNotBlank()) output.append("ORG:${escape(card.company)}\r\n")
+                    if (card.jobTitle.isNotBlank()) output.append("TITLE:${escape(card.jobTitle)}\r\n")
+                    if (card.birthday.isNotBlank()) output.append("BDAY:${escape(card.birthday)}\r\n")
+                    if (card.notes.isNotBlank()) output.append("NOTE:${escape(card.notes)}\r\n")
+                    output.append("END:VCARD\r\n")
+                    exported++
+                }
+            }
+            exported
+        }
+
     private fun phoneType(label: String) = when (label.lowercase()) {
         "mobile" -> PhoneRow.TYPE_MOBILE
         "home" -> PhoneRow.TYPE_HOME
