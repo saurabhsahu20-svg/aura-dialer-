@@ -1021,8 +1021,9 @@ private fun ContactsScreen(
     var pickedGroup by remember { mutableStateOf<ContactGroup?>(null) }
     var groupMenu by remember { mutableStateOf(false) }
     var groupMembers by remember { mutableStateOf<Set<Long>>(emptySet()) }
-    val groups by produceState<List<ContactGroup>>(emptyList(), manager) {
-        value = try { manager.groups() } catch (_: Exception) { emptyList() }
+    var groups by remember { mutableStateOf<List<ContactGroup>>(emptyList()) }
+    LaunchedEffect(manager) {
+        groups = try { manager.groups() } catch (_: Exception) { emptyList() }
     }
     LaunchedEffect(pickedGroup) {
         groupMembers = if (pickedGroup == null) emptySet()
