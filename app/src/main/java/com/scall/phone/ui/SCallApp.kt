@@ -102,12 +102,31 @@ internal fun SCallApp(
     var pendingHistoryDeletion by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var isDeletingHistory by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
+    var loadedOnce by remember { mutableStateOf(false) }
     var pendingNumber by remember { mutableStateOf<String?>(null) }
     var pendingSims by remember { mutableStateOf<List<SimAccount>>(emptyList()) }
     var pendingSmsNumber by remember { mutableStateOf<String?>(null) }
     var pendingSmsSims by remember { mutableStateOf<List<SmsSubscription>>(emptyList()) }
     val currentCall by CallBridge.current.collectAsState()
     var waitingForOutgoingCallUi by remember { mutableStateOf(false) }
+
+    // Cache search results: otherwise every keypress, call-state update and UI animation
+    // walks the entire call log and reads private history notes again.
+    val matchedContacts = remember(contacts, query) {
+        if (query.isBlank()) contacts
+        else contacts.filter { it.name.contains(query, true) || it.number.contains(query) }
+    }
+    val matchedFavorites = remember(contacts, query) {
+        contacts.filter { it.favorite &&
+            (query.isBlank() || it.name.contains(query, true) || it.number.contains(query)) }
+    }
+    val matchedRecents = remember(recents, query, localRefresh) {
+        if (query.isBlank()) recents else recents.filter {
+            it.name.contains(query, true) || it.number.contains(query) ||
+                (historyStore.title(it)?.contains(query, true) == true) ||
+                historyStore.note(it).contains(query, true)
+        }
+    }
 
     fun navigateTo(destination: String) {
         if (destination == page) return
@@ -147,11 +166,23 @@ internal fun SCallApp(
     }
 
     LaunchedEffect(refreshVersion, localRefresh) {
-        isLoading = true
-        val newContacts = repository.contacts()
-        contacts = newContacts
-        recents = repository.recentCalls(newContacts)
-        isLoading = false
+        // Keep the last successful list visible while Android reloads content providers.
+        // This prevents the Recents/Contacts screens flashing a loading state
+        // whenever returning from a call or system permission dialog.
+        if (!loadedOnce) isLoading = true
+        try {
+            val newContacts = repository.contacts()
+            val newRecents = repository.recentCalls(newContacts)
+            contacts = newContacts
+            recents = newRecents
+            loadedOnce = true
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            android.util.Log.e("SCall", "Unable to refresh phone records", error)
+        } finally {
+            isLoading = false
+        }
     }
     LaunchedEffect(externalDialNumber) {
         if (externalDialNumber.isNotEmpty()) {
@@ -577,12 +608,19 @@ internal fun SCallApp(
                         requestPermissions = requestPermissions
                     )
                     page == "Keypad" -> {
-                        val choice = simPrefs.voiceChoice()
-                        val label = when (choice) {
-                            SimPreferences.ASK -> "Ask every time"
-                            SimPreferences.SYSTEM -> "Android default"
-                            else -> repository.availableSimAccounts()
-                                .firstOrNull { it.key == choice }?.label ?: "Line unavailable"
+                        // Avoid repeatedly querying Telecom over Binder on each keypad digit.
+                        val choice = remember(page, refreshVersion, localRefresh) {
+                            simPrefs.voiceChoice()
+                        }
+                        val label = remember(page, choice, refreshVersion, localRefresh) {
+                            when (choice) {
+                                SimPreferences.ASK -> "Ask every time"
+                                SimPreferences.SYSTEM -> "Android default"
+                                else -> runCatching {
+                                    repository.availableSimAccounts()
+                                        .firstOrNull { it.key == choice }?.label
+                                }.getOrNull() ?: "Line unavailable"
+                            }
                         }
                         KeypadScreen(
                             value = dialNumber,
@@ -654,7 +692,7 @@ internal fun SCallApp(
                         SearchField(value = query, onChange = { query = it })
                         when (page) {
                             "Contacts" -> ContactsScreen(
-                                contacts = contacts.filter { query.isBlank() || it.name.contains(query, true) || it.number.contains(query) },
+                                contacts = matchedContacts,
                                 photos = photos, loading = isLoading,
                                 swipesEnabled = enableSwipes,
                                 onCall = ::requestCall,
@@ -663,7 +701,7 @@ internal fun SCallApp(
                                 onPhoto = ::openPhotoEditor
                             )
                             "Favorites" -> ContactsScreen(
-                                contacts = contacts.filter { it.favorite && (query.isBlank() || it.name.contains(query, true) || it.number.contains(query)) },
+                                contacts = matchedFavorites,
                                 photos = photos, loading = isLoading,
                                 swipesEnabled = enableSwipes,
                                 onCall = ::requestCall,
@@ -673,10 +711,7 @@ internal fun SCallApp(
                                 emptyTitle = "No favorites yet"
                             )
                             else -> RecentsScreen(
-                                calls = recents.filter { query.isBlank() ||
-                                    it.name.contains(query, true) || it.number.contains(query) ||
-                                    (historyStore.title(it)?.contains(query, true) == true) ||
-                                    historyStore.note(it).contains(query, true) },
+                                calls = matchedRecents,
                                 photos = photos, historyStore = historyStore, loading = isLoading,
                                 swipesEnabled = enableSwipes,
                                 selectionMode = historySelectionMode,
