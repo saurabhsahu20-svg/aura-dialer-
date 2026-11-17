@@ -208,7 +208,7 @@ internal class ContactManager(private val context: Context) {
                 ContactsContract.CommonDataKinds.Organization.TITLE to person.jobTitle.trim(), ContactsContract.CommonDataKinds.Organization.DEPARTMENT to person.department.trim()),
                 listOf(person.company, person.jobTitle, person.department).any { it.isNotBlank() })
             single(ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE, mapOf(ContactsContract.CommonDataKinds.Note.NOTE to person.notes.trim()), person.notes.isNotBlank())
-            single(ContactsContract.CommonDataKinds.Website.CONTENT_ITEM_TYPE, mapOf(ContactsContract.CommonDataKinds.Website.URL to person.ContactsContract.CommonDataKinds.Website.trim()), person.ContactsContract.CommonDataKinds.Website.isNotBlank())
+            single(ContactsContract.CommonDataKinds.Website.CONTENT_ITEM_TYPE, mapOf(ContactsContract.CommonDataKinds.Website.URL to person.website.trim()), person.website.isNotBlank())
             single(ContactsContract.CommonDataKinds.Relation.CONTENT_ITEM_TYPE, mapOf(ContactsContract.CommonDataKinds.Relation.NAME to person.relationship.trim(),
                 ContactsContract.CommonDataKinds.Relation.TYPE to ContactsContract.CommonDataKinds.Relation.TYPE_OTHER), person.relationship.isNotBlank())
             single(ContactsContract.CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE, mapOf(ContactsContract.CommonDataKinds.StructuredPostal.STREET to person.street.trim(),
