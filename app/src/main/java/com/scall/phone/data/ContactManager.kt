@@ -214,7 +214,7 @@ internal class ContactManager(private val context: Context) {
             single(ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE, mapOf(ContactsContract.CommonDataKinds.Note.NOTE to person.notes.trim()), person.notes.isNotBlank())
             single(ContactsContract.CommonDataKinds.Website.CONTENT_ITEM_TYPE, mapOf(ContactsContract.CommonDataKinds.Website.URL to person.website.trim()), person.website.isNotBlank())
             single(ContactsContract.CommonDataKinds.Relation.CONTENT_ITEM_TYPE, mapOf(ContactsContract.CommonDataKinds.Relation.NAME to person.relationship.trim(),
-                ContactsContract.CommonDataKinds.Relation.TYPE to ContactsContract.CommonDataKinds.Relation.TYPE_OTHER), person.relationship.isNotBlank())
+                ContactsContract.CommonDataKinds.Relation.TYPE to ContactsContract.CommonDataKinds.Relation.TYPE_CUSTOM), person.relationship.isNotBlank())
             single(ContactsContract.CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE, mapOf(ContactsContract.CommonDataKinds.StructuredPostal.STREET to person.street.trim(),
                 ContactsContract.CommonDataKinds.StructuredPostal.CITY to person.city.trim(), ContactsContract.CommonDataKinds.StructuredPostal.REGION to person.state.trim(),
                 ContactsContract.CommonDataKinds.StructuredPostal.POSTCODE to person.postcode.trim(), ContactsContract.CommonDataKinds.StructuredPostal.COUNTRY to person.country.trim(),
