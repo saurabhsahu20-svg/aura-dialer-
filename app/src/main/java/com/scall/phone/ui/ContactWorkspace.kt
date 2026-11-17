@@ -1,6 +1,8 @@
 package com.scall.phone.ui
 
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -70,6 +72,15 @@ internal fun ContactWorkspace(
     var confirmDelete by remember { mutableStateOf(false) }
     var confirmExit by remember { mutableStateOf(false) }
     var chooseNumberAction by remember { mutableStateOf<String?>(null) }
+    var chosenPhoto by remember(contactId) { mutableStateOf<Uri?>(null) }
+    var photoRemoved by remember(contactId) { mutableStateOf(false) }
+    val choosePhoto = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            chosenPhoto = uri
+            photoRemoved = false
+            dirty = true
+        }
+    }
 
     fun change(updated: ManagedContact) {
         person = updated
@@ -103,7 +114,7 @@ internal fun ContactWorkspace(
         saving = true
         scope.launch {
             try {
-                val id = manager.save(person, selectedAccount)
+                val id = manager.save(person, selectedAccount, chosenPhoto, photoRemoved)
                 if (id > 0L) {
                     dirty = false
                     Toast.makeText(context, "Contact saved", Toast.LENGTH_SHORT).show()
@@ -237,11 +248,22 @@ internal fun ContactWorkspace(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 item {
-                    ContactAvatar(person.fullName.ifBlank { "New" }, person.photo, 90.dp)
-                    Text("Profile photo can be changed using Android Contacts",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = palette.onSurfaceVariant, textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(vertical = 6.dp))
+                    ContactAvatar(person.fullName.ifBlank { "New" },
+                        if (photoRemoved) null else chosenPhoto?.toString() ?: person.photo, 90.dp)
+                    Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { choosePhoto.launch(arrayOf("image/*")) }) {
+                            Icon(Icons.Default.AddPhotoAlternate, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(if (person.photo == null) "Add photo" else "Change photo")
+                        }
+                        if (chosenPhoto != null || person.photo != null) {
+                            TextButton(onClick = {
+                                chosenPhoto = null
+                                photoRemoved = true
+                                dirty = true
+                            }) { Text("Remove photo") }
+                        }
+                    }
                 }
                 if (contactId == 0L && accounts.isNotEmpty()) {
                     item {
