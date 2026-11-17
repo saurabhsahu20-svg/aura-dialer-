@@ -37,6 +37,7 @@ import com.scall.phone.R
 import com.scall.phone.data.CallerPhotoStyle
 import com.scall.phone.data.ContactEntry
 import com.scall.phone.data.ContactManager
+import com.scall.phone.data.ContactGroup
 import com.scall.phone.data.CallStartAccess
 import com.scall.phone.data.callStartAccess
 import com.scall.phone.data.PhoneRepository
@@ -794,6 +795,7 @@ internal fun SCallApp(
                         SearchField(value = query, onChange = { query = it })
                         when (page) {
                             "Contacts" -> ContactsScreen(
+                                manager = contactsManager,
                                 contacts = matchedContacts,
                                 photos = photos, loading = isLoading,
                                 swipesEnabled = enableSwipes,
@@ -807,6 +809,7 @@ internal fun SCallApp(
                                 onPhoto = ::openPhotoEditor
                             )
                             "Favorites" -> ContactsScreen(
+                                manager = contactsManager,
                                 contacts = matchedFavorites,
                                 photos = photos, loading = isLoading,
                                 swipesEnabled = enableSwipes,
@@ -962,20 +965,76 @@ internal fun EmptyState(title: String, subtitle: String) {
 
 @Composable
 private fun ContactsScreen(
+    manager: ContactManager,
     contacts: List<ContactEntry>, photos: PhotoStore, loading: Boolean,
     swipesEnabled: Boolean, onCall: (String) -> Unit, onMessage: (String) -> Unit,
     onContact: (ContactEntry) -> Unit,
     onPhoto: (ContactEntry) -> Unit,
     emptyTitle: String = "No contacts found"
 ) {
-    if (contacts.isEmpty()) {
-        EmptyState(if (loading) "Loading contacts…" else emptyTitle,
-            "Allow contacts access or add contacts to your phone.")
-        return
+    var section by remember { mutableStateOf("Contacts") }
+    var pickedGroup by remember { mutableStateOf<ContactGroup?>(null) }
+    var groupMenu by remember { mutableStateOf(false) }
+    var groupMembers by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    val groups by produceState<List<ContactGroup>>(emptyList(), manager) {
+        value = try { manager.groups() } catch (_: Exception) { emptyList() }
+    }
+    LaunchedEffect(pickedGroup) {
+        groupMembers = if (pickedGroup == null) emptySet()
+        else try { manager.members(pickedGroup!!.id) } catch (_: Exception) { emptySet() }
+    }
+    val visible = remember(contacts, section, pickedGroup, groupMembers) {
+        when (section) {
+            "Favourites" -> contacts.filter { it.favorite }
+            "Groups" -> contacts.filter { it.id in groupMembers }
+            else -> contacts
+        }
     }
     LazyColumn(contentPadding = PaddingValues(bottom = 100.dp)) {
-        item { SectionHeading("Contacts", "${contacts.size} contacts") }
-        items(contacts, key = { "${it.id}:${it.number}" }) { contact ->
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 18.dp, vertical = 7.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                listOf("Contacts", "Favourites", "Groups").forEach { tab ->
+                    FilterChip(selected = section == tab,
+                        onClick = { section = tab }, label = { Text(tab) })
+                }
+            }
+        }
+        if (section == "Groups") {
+            item {
+                Box(Modifier.padding(horizontal = 18.dp)) {
+                    OutlinedButton(onClick = { groupMenu = true }) {
+                        Icon(Icons.Default.GroupWork, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(pickedGroup?.title ?: "Choose contact group")
+                    }
+                    DropdownMenu(expanded = groupMenu, onDismissRequest = { groupMenu = false }) {
+                        groups.forEach { group ->
+                            DropdownMenuItem(text = { Text(group.title) }, onClick = {
+                                pickedGroup = group
+                                groupMenu = false
+                            })
+                        }
+                    }
+                }
+            }
+        }
+        item { SectionHeading(if (section == "Groups") pickedGroup?.title ?: "Groups" else section,
+            "${visible.size} contacts") }
+        if (visible.isEmpty()) {
+            item {
+                EmptyState(
+                    if (loading) "Loading contacts…" else if (section == "Groups" && groups.isEmpty())
+                        "No contact groups available" else emptyTitle,
+                    if (section == "Groups") "Groups are provided by Android and your selected contact accounts."
+                    else "Allow Contacts access or save a new contact with +."
+                )
+            }
+        }
+        items(visible, key = { "${it.id}:${it.number}" }) { contact ->
             SwipeContactRow(
                 name = contact.name, number = contact.number,
                 photoUri = photos.photoFor(contact.number) ?: contact.photo,
