@@ -520,7 +520,7 @@ internal fun SCallApp(
                         title = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 androidx.compose.foundation.Image(
-                                    painter = painterResource(R.drawable.scall_brand_icon),
+                                    painter = painterResource(R.drawable.scall_rainbow_call_logo),
                                     contentDescription = "S call logo",
                                     modifier = Modifier.size(34.dp)
                                 )
