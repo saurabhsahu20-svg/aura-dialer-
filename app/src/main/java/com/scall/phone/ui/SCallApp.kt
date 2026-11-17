@@ -4,6 +4,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.telecom.Call
 import android.telecom.PhoneAccountHandle
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -49,6 +50,7 @@ import com.scall.phone.data.SimPreferences
 import com.scall.phone.data.chooseCallRoute
 import com.scall.phone.data.CallRoute
 import com.scall.phone.data.SmsSubscription
+import com.scall.phone.telecom.MissedCallBadges
 import com.scall.phone.telecom.CallBridge
 import com.scall.phone.telecom.CallUiActivity
 import com.scall.phone.telecom.IncomingCallAccess
@@ -116,6 +118,7 @@ internal fun SCallApp(
     var pendingSmsNumber by remember { mutableStateOf<String?>(null) }
     var pendingSmsSims by remember { mutableStateOf<List<SmsSubscription>>(emptyList()) }
     val currentCall by CallBridge.current.collectAsState()
+    val unreadMissedCalls by MissedCallBadges.unreadCount.collectAsState()
     var waitingForOutgoingCallUi by remember { mutableStateOf(false) }
 
     // Cache search results: otherwise every keypress, call-state update and UI animation
@@ -207,6 +210,7 @@ internal fun SCallApp(
             val newRecents = repository.recentCalls(newContacts)
             contacts = newContacts
             recents = newRecents
+            MissedCallBadges.refresh(context)
             loadedOnce = true
         } catch (error: kotlinx.coroutines.CancellationException) {
             throw error
@@ -582,11 +586,25 @@ internal fun SCallApp(
                     TopAppBar(
                         title = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                androidx.compose.foundation.Image(
-                                    painter = painterResource(R.drawable.scall_bottle_green_call_icon),
-                                    contentDescription = "S call logo",
-                                    modifier = Modifier.size(34.dp)
-                                )
+                                Box {
+                                    androidx.compose.foundation.Image(
+                                        painter = painterResource(R.drawable.scall_bottle_green_call_icon),
+                                        contentDescription = "S call logo",
+                                        modifier = Modifier.size(34.dp)
+                                    )
+                                    if (currentCall?.state == Call.STATE_RINGING || unreadMissedCalls > 0) {
+                                        Badge(
+                                            modifier = Modifier.align(Alignment.TopEnd).offset(x = 7.dp, y = (-5).dp),
+                                            containerColor = Color(0xFFF44336),
+                                            contentColor = Color.White
+                                        ) {
+                                            if (unreadMissedCalls > 0) {
+                                                Text(if (unreadMissedCalls > 9) "9+" else unreadMissedCalls.toString(),
+                                                    fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
                                 Spacer(Modifier.width(11.dp))
                                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                     Text("S Call", fontWeight = FontWeight.Bold,
@@ -620,8 +638,29 @@ internal fun SCallApp(
                         tabs.forEach { tab ->
                             NavigationBarItem(
                                 selected = page == tab.label,
-                                onClick = { navigateTo(tab.label); query = "" },
-                                icon = { Icon(tab.icon, contentDescription = tab.label) },
+                                onClick = {
+                                    navigateTo(tab.label); query = ""
+                                    if (tab.label == "Recents") {
+                                        actionScope.launch {
+                                            if (repository.markMissedCallsRead()) {
+                                                MissedCallBadges.refresh(context)
+                                                localRefresh++
+                                            }
+                                        }
+                                    }
+                                },
+                                icon = {
+                                    Box {
+                                        Icon(tab.icon, contentDescription = tab.label)
+                                        if (tab.label == "Recents" && unreadMissedCalls > 0) {
+                                            Badge(modifier = Modifier.align(Alignment.TopEnd).offset(x = 10.dp, y = (-7).dp),
+                                                containerColor = Color(0xFFF44336), contentColor = Color.White) {
+                                                Text(if (unreadMissedCalls > 9) "9+" else unreadMissedCalls.toString(),
+                                                    fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                                            }
+                                        }
+                                    }
+                                },
                                 label = { Text(tab.label, fontSize = 11.sp,
                                     fontWeight = if (page == tab.label) FontWeight.SemiBold else FontWeight.Normal) },
                                 alwaysShowLabel = true,
