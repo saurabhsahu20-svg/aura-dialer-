@@ -151,6 +151,24 @@ internal class PhoneRepository(private val context: Context) {
         }
     }
 
+    /** Clears only actual unread missed-call rows when the user opens their history. */
+    suspend fun markMissedCallsRead(): Boolean = withContext(Dispatchers.IO) {
+        if (!isDefaultDialer() || !hasLogsPermission() || !hasWriteLogsPermission())
+            return@withContext false
+        try {
+            context.contentResolver.update(
+                CallLog.Calls.CONTENT_URI,
+                android.content.ContentValues().apply { put(CallLog.Calls.IS_READ, 1) },
+                "${CallLog.Calls.TYPE}=? AND ${CallLog.Calls.IS_READ}=?",
+                arrayOf(CallLog.Calls.MISSED_TYPE.toString(), "0")
+            )
+            true
+        } catch (error: Exception) {
+            android.util.Log.w("SCall", "Could not mark missed calls as read", error)
+            false
+        }
+    }
+
     suspend fun findContact(number: String): ContactEntry? = withContext(Dispatchers.IO) {
         if (!hasContactsPermission() || number.isBlank()) return@withContext null
         val uri = Uri.withAppendedPath(
