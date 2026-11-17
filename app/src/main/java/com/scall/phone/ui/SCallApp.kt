@@ -344,11 +344,17 @@ internal fun SCallApp(
                 return
             }
         }
-        photos.save(contact.number, picked, style)
-        newPhoto = null
-        photoEditor = null
-        localRefresh++
-        Toast.makeText(context, "Caller photo saved", Toast.LENGTH_SHORT).show()
+        try {
+            photos.save(contact.number, picked, style)
+            newPhoto = null
+            photoEditor = null
+            localRefresh++
+            Toast.makeText(context, "Caller photo saved", Toast.LENGTH_SHORT).show()
+        } catch (error: Exception) {
+            android.util.Log.e("SCall", "Unable to save caller photo settings", error)
+            Toast.makeText(context, "Could not save photo. Check device storage.",
+                Toast.LENGTH_LONG).show()
+        }
     }
 
     SCallTheme(theme) {
@@ -440,9 +446,15 @@ internal fun SCallApp(
                 },
                 confirmButton = {
                     TextButton(onClick = {
-                        historyStore.save(row, historyTitle, historyNote)
-                        editingHistory = null
-                        localRefresh++
+                        try {
+                            historyStore.save(row, historyTitle, historyNote)
+                            editingHistory = null
+                            localRefresh++
+                        } catch (error: Exception) {
+                            android.util.Log.e("SCall", "Unable to save call note", error)
+                            Toast.makeText(context, "Could not save call note",
+                                Toast.LENGTH_SHORT).show()
+                        }
                     }) { Text("Save") }
                 },
                 dismissButton = {
