@@ -235,11 +235,11 @@ internal class ContactManager(private val context: Context) {
             }
             putDate(ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY, person.birthday)
             putDate(ContactsContract.CommonDataKinds.Event.TYPE_ANNIVERSARY, person.anniversary)
-            val photo = ContactsContract.CommonDataKinds.Photo
             if (pickedPhoto != null) {
-                single(photo.CONTENT_ITEM_TYPE, mapOf(photo.PHOTO to photoJpeg(pickedPhoto)), true)
+                single(ContactsContract.CommonDataKinds.Photo.CONTENT_ITEM_TYPE,
+                    mapOf(ContactsContract.CommonDataKinds.Photo.PHOTO to photoJpeg(pickedPhoto)), true)
             } else if (removePhoto) {
-                single(photo.CONTENT_ITEM_TYPE, emptyMap(), false)
+                single(ContactsContract.CommonDataKinds.Photo.CONTENT_ITEM_TYPE, emptyMap(), false)
             }
             val saved = resolver.applyBatch(ContactsContract.AUTHORITY, ops)
             val contactId = if (creating) {
