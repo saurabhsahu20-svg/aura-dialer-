@@ -21,6 +21,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var repository: PhoneRepository
     private var dialNumber by mutableStateOf("")
     private var refreshVersion by mutableIntStateOf(0)
+    private var lastResumeAt = 0L
 
     private val roleLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -54,7 +55,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        refreshVersion++
+        val now = android.os.SystemClock.elapsedRealtime()
+        // onCreate already loads records. Do not fire a duplicate provider scan
+        // when Activity immediately enters onResume, or on quick app transitions.
+        if (lastResumeAt > 0L && now - lastResumeAt >= 1000L) {
+            refreshVersion++
+        }
+        lastResumeAt = now
     }
 
     private fun readDialIntent(intent: Intent?) {
