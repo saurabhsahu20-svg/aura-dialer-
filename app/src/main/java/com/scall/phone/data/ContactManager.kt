@@ -1,0 +1,299 @@
+package com.scall.phone.data
+
+import android.Manifest
+import android.content.ContentProviderOperation
+import android.content.ContentValues
+import android.content.Context
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.ContactsContract
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+internal data class ContactValue(val value: String = "", val label: String = "Mobile", val rowId: Long = 0L)
+internal data class ContactAccount(val name: String?, val type: String?, val label: String)
+internal data class ManagedContact(
+    val id: Long = 0L, val rawId: Long = 0L,
+    val first: String = "", val middle: String = "", val last: String = "",
+    val nickname: String = "", val phones: List<ContactValue> = listOf(ContactValue()),
+    val emails: List<ContactValue> = emptyList(),
+    val company: String = "", val jobTitle: String = "", val department: String = "",
+    val notes: String = "", val birthday: String = "", val anniversary: String = "",
+    val street: String = "", val city: String = "", val state: String = "",
+    val postcode: String = "", val country: String = "",
+    val website: String = "", val relationship: String = "",
+    val favorite: Boolean = false, val photo: String? = null
+) {
+    val fullName: String get() = listOf(first, middle, last)
+        .filter { it.isNotBlank() }.joinToString(" ").trim()
+}
+
+/** Android ContactsContract is the source of truth; no invented/synced contact records. */
+internal class ContactManager(private val context: Context) {
+    private val resolver = context.contentResolver
+    private val data = ContactsContract.Data
+    private val raw = ContactsContract.RawContacts
+    private val contacts = ContactsContract.Contacts
+    private val phone = ContactsContract.CommonDataKinds.Phone
+    private val email = ContactsContract.CommonDataKinds.Email
+    private val name = ContactsContract.CommonDataKinds.StructuredName
+
+    fun canRead() = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) ==
+        PackageManager.PERMISSION_GRANTED
+    fun canWrite() = ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_CONTACTS) ==
+        PackageManager.PERMISSION_GRANTED
+
+    suspend fun accounts(): List<ContactAccount> = withContext(Dispatchers.IO) {
+        if (!canRead()) return@withContext emptyList()
+        val accounts = linkedSetOf<Pair<String?, String?>>(null to null)
+        try {
+            resolver.query(raw.CONTENT_URI, arrayOf(raw.ACCOUNT_NAME, raw.ACCOUNT_TYPE),
+                "${raw.DELETED}=0", null, null)?.use { c ->
+                while (c.moveToNext()) accounts += c.getString(0) to c.getString(1)
+            }
+        } catch (_: SecurityException) { }
+        accounts.map { (n, t) -> ContactAccount(n, t, n ?: "Device (local)") }
+    }
+
+    /**
+     * Edit one raw record within an aggregated contact. Never replace siblings
+     * from other accounts or remove unsupported fields.
+     */
+    suspend fun load(contactId: Long): ManagedContact? = withContext(Dispatchers.IO) {
+        if (!canRead() || contactId <= 0) return@withContext null
+        val rawId = resolver.query(raw.CONTENT_URI, arrayOf(raw._ID),
+            "${raw.CONTACT_ID}=? AND ${raw.DELETED}=0",
+            arrayOf(contactId.toString()), "${raw._ID} ASC")?.use {
+                if (it.moveToFirst()) it.getLong(0) else null
+            } ?: return@withContext null
+        var result = ManagedContact(id = contactId, rawId = rawId, phones = emptyList())
+        val phones = mutableListOf<ContactValue>()
+        val emails = mutableListOf<ContactValue>()
+        resolver.query(data.CONTENT_URI, arrayOf(data._ID, data.MIMETYPE,
+            data.DATA1, data.DATA2, data.DATA3, data.DATA4, data.DATA5,
+            data.DATA6, data.DATA7, data.DATA8, data.DATA9, data.DATA10),
+            "${data.RAW_CONTACT_ID}=?", arrayOf(rawId.toString()), null)?.use { c ->
+            while (c.moveToNext()) {
+                val id = c.getLong(0)
+                fun v(index: Int) = c.getString(index).orEmpty()
+                when (v(1)) {
+                    name.CONTENT_ITEM_TYPE -> result = result.copy(first = v(3), middle = v(6), last = v(4))
+                    phone.CONTENT_ITEM_TYPE -> phones += ContactValue(v(2),
+                        phoneLabel(v(3), v(4)), id)
+                    email.CONTENT_ITEM_TYPE -> emails += ContactValue(v(2),
+                        emailLabel(v(3), v(4)), id)
+                    ContactsContract.CommonDataKinds.Nickname.CONTENT_ITEM_TYPE ->
+                        result = result.copy(nickname = v(2))
+                    ContactsContract.CommonDataKinds.Organization.CONTENT_ITEM_TYPE ->
+                        result = result.copy(company = v(2), jobTitle = v(3), department = v(7))
+                    ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE ->
+                        result = result.copy(notes = v(2))
+                    ContactsContract.CommonDataKinds.Website.CONTENT_ITEM_TYPE ->
+                        result = result.copy(website = v(2))
+                    ContactsContract.CommonDataKinds.Relation.CONTENT_ITEM_TYPE ->
+                        result = result.copy(relationship = v(2))
+                    ContactsContract.CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE ->
+                        result = result.copy(street = v(5), city = v(8), state = v(9),
+                            postcode = v(10), country = v(11))
+                    ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE ->
+                        when (v(3).toIntOrNull()) {
+                            ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY ->
+                                result = result.copy(birthday = v(2))
+                            ContactsContract.CommonDataKinds.Event.TYPE_ANNIVERSARY ->
+                                result = result.copy(anniversary = v(2))
+                        }
+                }
+            }
+        }
+        resolver.query(contacts.CONTENT_URI,
+            arrayOf(contacts.DISPLAY_NAME_PRIMARY, contacts.STARRED, contacts.PHOTO_URI),
+            "${contacts._ID}=?", arrayOf(contactId.toString()), null)?.use { c ->
+            if (c.moveToFirst()) {
+                if (result.fullName.isBlank()) result = result.copy(first = c.getString(0).orEmpty())
+                result = result.copy(favorite = c.getInt(1) != 0, photo = c.getString(2))
+            }
+        }
+        result.copy(phones = phones.ifEmpty { listOf(ContactValue()) }, emails = emails)
+    }
+
+    /** Aggregated numbers may live in several synced raw contacts. */
+    suspend fun numbers(contactId: Long): List<ContactValue> = withContext(Dispatchers.IO) {
+        if (!canRead()) return@withContext emptyList()
+        val found = mutableListOf<ContactValue>()
+        resolver.query(phone.CONTENT_URI, arrayOf(phone.NUMBER, phone.TYPE, phone.LABEL),
+            "${phone.CONTACT_ID}=?", arrayOf(contactId.toString()), null)?.use { c ->
+            while (c.moveToNext()) found += ContactValue(c.getString(0).orEmpty(),
+                phoneLabel(c.getString(1), c.getString(2)))
+        }
+        found.filter { it.value.isNotBlank() }.distinctBy { normalizeNumber(it.value) }
+    }
+
+    suspend fun duplicates(number: String, exceptId: Long = 0): List<String> = withContext(Dispatchers.IO) {
+        if (!canRead() || number.filter(Char::isDigit).length < 7) return@withContext emptyList()
+        val found = linkedSetOf<String>()
+        val lookup = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number))
+        resolver.query(lookup, arrayOf(ContactsContract.PhoneLookup._ID,
+            ContactsContract.PhoneLookup.DISPLAY_NAME), null, null, null)?.use { c ->
+            while (c.moveToNext()) if (c.getLong(0) != exceptId)
+                found += c.getString(1).orEmpty().ifBlank { "Another contact" }
+        }
+        found.toList()
+    }
+
+    suspend fun save(person: ManagedContact, account: ContactAccount? = null): Long =
+        withContext(Dispatchers.IO) {
+            if (!canWrite()) throw SecurityException("Allow Contacts editing in Android settings")
+            require(person.fullName.isNotBlank()) { "Enter a contact name" }
+            require(person.phones.any { it.value.count(Char::isDigit) >= 3 }) {
+                "Enter a valid phone number"
+            }
+            val creating = person.id == 0L
+            if (!creating) require(person.rawId > 0L) { "The contact is no longer available" }
+            val ops = arrayListOf<ContentProviderOperation>()
+            if (creating) ops += ContentProviderOperation.newInsert(raw.CONTENT_URI)
+                .withValue(raw.ACCOUNT_NAME, account?.name)
+                .withValue(raw.ACCOUNT_TYPE, account?.type).build()
+            val existing = mutableMapOf<String, MutableList<Long>>()
+            if (!creating) resolver.query(data.CONTENT_URI, arrayOf(data._ID, data.MIMETYPE),
+                "${data.RAW_CONTACT_ID}=?", arrayOf(person.rawId.toString()), null)?.use { c ->
+                while (c.moveToNext()) existing.getOrPut(c.getString(1).orEmpty()) {
+                    mutableListOf()
+                }.add(c.getLong(0))
+            }
+            fun ins(mime: String, values: Map<String, Any?>): ContentProviderOperation {
+                val builder = ContentProviderOperation.newInsert(data.CONTENT_URI)
+                    .withValue(data.MIMETYPE, mime)
+                if (creating) builder.withValueBackReference(data.RAW_CONTACT_ID, 0)
+                else builder.withValue(data.RAW_CONTACT_ID, person.rawId)
+                values.forEach { (k, v) -> builder.withValue(k, v) }
+                return builder.build()
+            }
+            fun upd(id: Long, values: Map<String, Any?>): ContentProviderOperation {
+                val builder = ContentProviderOperation.newUpdate(data.CONTENT_URI)
+                    .withSelection("${data._ID}=? AND ${data.RAW_CONTACT_ID}=?",
+                        arrayOf(id.toString(), person.rawId.toString()))
+                values.forEach { (k, v) -> builder.withValue(k, v) }
+                return builder.build()
+            }
+            fun delete(id: Long) = ContentProviderOperation.newDelete(data.CONTENT_URI)
+                .withSelection("${data._ID}=? AND ${data.RAW_CONTACT_ID}=?",
+                    arrayOf(id.toString(), person.rawId.toString())).build()
+            fun single(mime: String, values: Map<String, Any?>, enabled: Boolean) {
+                val id = existing[mime]?.firstOrNull()
+                if (enabled) ops += if (id == null) ins(mime, values) else upd(id, values)
+                else if (id != null) ops += delete(id)
+            }
+            single(name.CONTENT_ITEM_TYPE, mapOf(name.GIVEN_NAME to person.first.trim(),
+                name.MIDDLE_NAME to person.middle.trim(), name.FAMILY_NAME to person.last.trim()), true)
+            fun repeated(mime: String, rows: List<ContactValue>, typeKey: String,
+                         labelKey: String, type: (String) -> Int) {
+                val retained = mutableSetOf<Long>()
+                rows.filter { it.value.isNotBlank() }.forEach { row ->
+                    val kind = type(row.label)
+                    val values = mapOf(data.DATA1 to row.value.trim(), typeKey to kind,
+                        labelKey to if (kind == 0) row.label else null)
+                    val id = row.rowId.takeIf { it in existing[mime].orEmpty() }
+                    if (id == null) ops += ins(mime, values)
+                    else { retained += id; ops += upd(id, values) }
+                }
+                // Deletion is scoped to explicitly removed rows of the edited raw only.
+                existing[mime].orEmpty().filterNot { it in retained }.forEach { ops += delete(it) }
+            }
+            repeated(phone.CONTENT_ITEM_TYPE, person.phones, phone.TYPE, phone.LABEL, ::phoneType)
+            repeated(email.CONTENT_ITEM_TYPE, person.emails, email.TYPE, email.LABEL, ::emailType)
+            val n = ContactsContract.CommonDataKinds.Nickname
+            single(n.CONTENT_ITEM_TYPE, mapOf(n.NAME to person.nickname.trim()), person.nickname.isNotBlank())
+            val o = ContactsContract.CommonDataKinds.Organization
+            single(o.CONTENT_ITEM_TYPE, mapOf(o.COMPANY to person.company.trim(),
+                o.TITLE to person.jobTitle.trim(), o.DEPARTMENT to person.department.trim()),
+                listOf(person.company, person.jobTitle, person.department).any { it.isNotBlank() })
+            val note = ContactsContract.CommonDataKinds.Note
+            single(note.CONTENT_ITEM_TYPE, mapOf(note.NOTE to person.notes.trim()), person.notes.isNotBlank())
+            val website = ContactsContract.CommonDataKinds.Website
+            single(website.CONTENT_ITEM_TYPE, mapOf(website.URL to person.website.trim()), person.website.isNotBlank())
+            val rel = ContactsContract.CommonDataKinds.Relation
+            single(rel.CONTENT_ITEM_TYPE, mapOf(rel.NAME to person.relationship.trim(),
+                rel.TYPE to rel.TYPE_OTHER), person.relationship.isNotBlank())
+            val postal = ContactsContract.CommonDataKinds.StructuredPostal
+            single(postal.CONTENT_ITEM_TYPE, mapOf(postal.STREET to person.street.trim(),
+                postal.CITY to person.city.trim(), postal.REGION to person.state.trim(),
+                postal.POSTCODE to person.postcode.trim(), postal.COUNTRY to person.country.trim(),
+                postal.TYPE to postal.TYPE_HOME),
+                listOf(person.street,person.city,person.state,person.postcode,person.country).any { it.isNotBlank() })
+            val event = ContactsContract.CommonDataKinds.Event
+            // Query event types so a birthday edit never silently overwrites an anniversary.
+            fun putDate(type: Int, value: String) {
+                val matched = existing[event.CONTENT_ITEM_TYPE].orEmpty().firstOrNull { row ->
+                    resolver.query(data.CONTENT_URI, arrayOf(event.TYPE), "${data._ID}=?",
+                        arrayOf(row.toString()), null)?.use { c ->
+                        c.moveToFirst() && c.getInt(0) == type
+                    } ?: false
+                }
+                if (value.isNotBlank()) {
+                    val values = mapOf(event.START_DATE to value.trim(), event.TYPE to type)
+                    ops += if (matched == null) ins(event.CONTENT_ITEM_TYPE, values) else upd(matched, values)
+                } else if (matched != null) ops += delete(matched)
+            }
+            putDate(event.TYPE_BIRTHDAY, person.birthday)
+            putDate(event.TYPE_ANNIVERSARY, person.anniversary)
+            val saved = resolver.applyBatch(ContactsContract.AUTHORITY, ops)
+            val contactId = if (creating) {
+                val newRawId = saved.firstOrNull()?.uri?.lastPathSegment?.toLongOrNull()
+                    ?: throw IllegalStateException("Contact saved but ID unavailable")
+                resolver.query(raw.CONTENT_URI, arrayOf(raw.CONTACT_ID),
+                    "${raw._ID}=?", arrayOf(newRawId.toString()), null)?.use { c ->
+                    if (c.moveToFirst()) c.getLong(0) else 0L
+                } ?: 0L
+            } else person.id
+            if (contactId > 0 && person.favorite) setFavoriteDirect(contactId, true)
+            contactId
+        }
+
+    suspend fun favorite(contactId: Long, starred: Boolean) = withContext(Dispatchers.IO) {
+        if (!canWrite()) false else setFavoriteDirect(contactId, starred)
+    }
+    private fun setFavoriteDirect(id: Long, starred: Boolean): Boolean {
+        val values = ContentValues().apply { put(contacts.STARRED, if (starred) 1 else 0) }
+        return resolver.update(Uri.withAppendedPath(contacts.CONTENT_URI, id.toString()), values, null, null) > 0
+    }
+    suspend fun delete(contactId: Long) = withContext(Dispatchers.IO) {
+        if (!canWrite()) false else resolver.delete(
+            Uri.withAppendedPath(contacts.CONTENT_URI, contactId.toString()), null, null) > 0
+    }
+    fun vcardUri(contactId: Long): Uri? {
+        if (!canRead()) return null
+        val key = resolver.query(Uri.withAppendedPath(contacts.CONTENT_URI, contactId.toString()),
+            arrayOf(contacts.LOOKUP_KEY), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0) else null
+        } ?: return null
+        return Uri.withAppendedPath(contacts.CONTENT_VCARD_URI, Uri.encode(key))
+    }
+
+    private fun phoneType(label: String) = when (label.lowercase()) {
+        "mobile" -> phone.TYPE_MOBILE
+        "home" -> phone.TYPE_HOME
+        "work" -> phone.TYPE_WORK
+        "other" -> phone.TYPE_OTHER
+        else -> phone.TYPE_CUSTOM
+    }
+    private fun emailType(label: String) = when (label.lowercase()) {
+        "personal", "home" -> email.TYPE_HOME
+        "work" -> email.TYPE_WORK
+        "other" -> email.TYPE_OTHER
+        else -> email.TYPE_CUSTOM
+    }
+    private fun phoneLabel(type: String?, custom: String?) = when (type?.toIntOrNull()) {
+        phone.TYPE_MOBILE -> "Mobile"
+        phone.TYPE_HOME -> "Home"
+        phone.TYPE_WORK -> "Work"
+        phone.TYPE_OTHER -> "Other"
+        else -> custom?.takeIf { it.isNotBlank() } ?: "Other"
+    }
+    private fun emailLabel(type: String?, custom: String?) = when (type?.toIntOrNull()) {
+        email.TYPE_HOME -> "Personal"
+        email.TYPE_WORK -> "Work"
+        email.TYPE_OTHER -> "Other"
+        else -> custom?.takeIf { it.isNotBlank() } ?: "Other"
+    }
+}
