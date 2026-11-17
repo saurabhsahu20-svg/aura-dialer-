@@ -116,7 +116,13 @@ internal fun ContactWorkspace(
             try {
                 val id = manager.save(person, selectedAccount, chosenPhoto, photoRemoved)
                 if (id > 0L) {
+                    // Refresh from the real Contacts provider before showing the profile.
+                    // In particular, a changed number or new photo must not show stale data.
+                    person = manager.load(id) ?: person
+                    numbers = manager.numbers(id)
                     dirty = false
+                    chosenPhoto = null
+                    photoRemoved = false
                     Toast.makeText(context, "Contact saved", Toast.LENGTH_SHORT).show()
                     onSaved(id)
                 } else Toast.makeText(context, "Contact saved. Refresh contacts to view it.",
