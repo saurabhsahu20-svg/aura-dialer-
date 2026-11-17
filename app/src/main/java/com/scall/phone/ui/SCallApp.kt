@@ -121,11 +121,17 @@ internal fun SCallApp(
     // walks the entire call log and reads private history notes again.
     val matchedContacts = remember(contacts, query) {
         if (query.isBlank()) contacts
-        else contacts.filter { it.name.contains(query, true) || it.number.contains(query) }
+        else contacts.filter {
+            it.name.contains(query, true) || it.nickname.contains(query, true) ||
+                it.company.contains(query, true) ||
+                it.allNumbers.any { number -> number.contains(query) }
+        }
     }
     val matchedFavorites = remember(contacts, query) {
         contacts.filter { it.favorite &&
-            (query.isBlank() || it.name.contains(query, true) || it.number.contains(query)) }
+            (query.isBlank() || it.name.contains(query, true) ||
+                it.nickname.contains(query, true) || it.company.contains(query, true) ||
+                it.allNumbers.any { number -> number.contains(query) }) }
     }
     // Expensive call-note searches run off the UI thread. Fast consecutive
     // keystrokes cancel older searches, keeping scrolling and dialpad responsive.
