@@ -1,8 +1,18 @@
-# S Caller — Android Dialer (v1.8.9 No-Recording Preview)
+# S Caller — Android Dialer (v1.9.0 Rainbow Call Icon Preview)
 
 **S call** is a privacy-focused Android phone dialer built with Kotlin and Jetpack Compose. It features a minimal Material 3 interface and the approved light-green S call launcher icon.
 
 [![Build S call debug APK](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml/badge.svg)](https://github.com/saurabhsahu20-svg/aura-dialer-/actions/workflows/android-debug-apk.yml)
+
+## 🌈 Current preview — S Caller v1.9.0 (Green S + Rainbow Call Icon)
+
+**[Official v1.9.0 public developer preview](https://github.com/saurabhsahu20-svg/aura-dialer-/releases/tag/v1.9.0-preview)**
+
+The Android launcher icon and in-app header now display the user's selected **green S / rainbow calling handset** logo. Android 8+ adaptive icons use safe-area padding; older Android devices use a compatible bitmap drawable. All calling features and the no-recording changes from v1.8.9 are preserved.
+
+This APK is **debug-signed and intended for testing**, not production-signed. Back up your local app data before replacing another differently signed APK; this image update does not affect phone calls or request additional permissions.
+
+## Older releases (archive)
 
 ## 📞 Current release — S Caller v1.8.9 (No Recording)
 
