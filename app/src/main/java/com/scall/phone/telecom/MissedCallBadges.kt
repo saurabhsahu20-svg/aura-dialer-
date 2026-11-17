@@ -91,7 +91,7 @@ internal object MissedCallBadges {
                 .setSmallIcon(R.drawable.ic_stat_call)
                 .setContentTitle(if (count == 1) "1 missed call" else "$count missed calls")
                 .setContentText("Open S Caller to review missed calls")
-                .setCategory(NotificationCompat.CATEGORY_MISSED_CALL)
+                .setCategory(NotificationCompat.CATEGORY_CALL)
                 .setContentIntent(launch)
                 .setAutoCancel(false)
                 .setOnlyAlertOnce(true)
