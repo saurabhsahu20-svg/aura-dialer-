@@ -132,13 +132,28 @@ internal fun CallScreen(
     val number = call?.number.orEmpty()
     var resolvedName by remember(number) { mutableStateOf("") }
     var resolvedPhoto by remember(number) { mutableStateOf<String?>(null) }
-    val photoStyle = remember(number) { store.styleFor(number) }
+    val photoStyle = remember(number) {
+        // A corrupted or unreadable photo preference must never crash live call UI.
+        runCatching { store.styleFor(number) }.getOrDefault(CallerPhotoStyle())
+    }
     LaunchedEffect(number) {
-        // Fetch photos/contact details off the UI thread; the call controls can
-        // be drawn and respond immediately even with a slow contacts provider.
+        // Keep photo/contact provider delays and failures off live call controls.
         val (contact, photo) = withContext(Dispatchers.IO) {
-            val matching = repo.findContact(number)
-            matching to (store.photoFor(number) ?: matching?.photo)
+            val matching = try {
+                repo.findContact(number)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                android.util.Log.w("SCall", "Caller contact lookup unavailable", error)
+                null
+            }
+            val custom = try {
+                store.photoFor(number)
+            } catch (error: Exception) {
+                android.util.Log.w("SCall", "Caller photo lookup unavailable", error)
+                null
+            }
+            matching to (custom ?: matching?.photo)
         }
         resolvedName = contact?.name.orEmpty()
         resolvedPhoto = photo
