@@ -52,12 +52,14 @@ internal fun RecordingSettingsScreen() {
     var cleanupConfirm by remember { mutableStateOf(false) }
     var playingId by remember { mutableStateOf<String?>(null) }
     var paused by remember { mutableStateOf(false) }
+    var preparingId by remember { mutableStateOf<String?>(null) }
     var player by remember { mutableStateOf<MediaPlayer?>(null) }
 
     fun stopPlayback() {
         val active = player
         player = null
         playingId = null
+        preparingId = null
         paused = false
         runCatching { active?.stop() }
         runCatching { active?.release() }
@@ -67,6 +69,7 @@ internal fun RecordingSettingsScreen() {
         onDispose {
             runCatching { player?.release() }
             player = null
+            preparingId = null
         }
     }
 
@@ -100,11 +103,14 @@ internal fun RecordingSettingsScreen() {
 
     fun playOrPause(recording: SavedRecording) {
         if (playingId == recording.id) {
+            if (preparingId == recording.id) return // Ignore taps until ready.
             try {
-                if (paused) player?.start() else player?.pause()
+                val active = player ?: return
+                if (paused) active.start() else active.pause()
                 paused = !paused
             } catch (_: RuntimeException) {
                 stopPlayback()
+                Toast.makeText(context, "Playback was interrupted", Toast.LENGTH_SHORT).show()
             }
             return
         }
@@ -116,22 +122,46 @@ internal fun RecordingSettingsScreen() {
         }
         val mp = MediaPlayer()
         try {
-            FileInputStream(audio).use { input ->
-                mp.setDataSource(input.fd)
-                mp.prepare()
+            FileInputStream(audio).use { input -> mp.setDataSource(input.fd) }
+            mp.setOnPreparedListener {
+                if (player !== mp || playingId != recording.id) return@setOnPreparedListener
+                preparingId = null
+                try {
+                    mp.start()
+                    paused = false
+                } catch (error: RuntimeException) {
+                    android.util.Log.w("SCallRecording", "Unable to play prepared audio", error)
+                    stopPlayback()
+                    Toast.makeText(context, "Audio playback failed", Toast.LENGTH_SHORT).show()
+                }
             }
             mp.setOnCompletionListener {
-                playingId = null
-                paused = false
-                player = null
+                if (player === mp) {
+                    playingId = null
+                    preparingId = null
+                    paused = false
+                    player = null
+                }
                 runCatching { mp.release() }
             }
-            mp.start()
+            mp.setOnErrorListener { _, _, _ ->
+                if (player === mp) {
+                    stopPlayback()
+                    Toast.makeText(context, "Cannot play this recording", Toast.LENGTH_SHORT).show()
+                } else {
+                    runCatching { mp.release() }
+                }
+                true
+            }
             player = mp
             playingId = recording.id
+            preparingId = recording.id
             paused = false
-        } catch (_: Exception) {
-            runCatching { mp.release() }
+            // Preparing long recordings synchronously here can freeze Compose.
+            mp.prepareAsync()
+        } catch (error: Exception) {
+            android.util.Log.w("SCallRecording", "Unable to initialize playback", error)
+            if (player === mp) stopPlayback() else runCatching { mp.release() }
             Toast.makeText(context, "Audio playback failed", Toast.LENGTH_LONG).show()
         }
     }
@@ -367,6 +397,7 @@ internal fun RecordingSettingsScreen() {
                                 if (playingId == item.id && !paused) Icons.Default.Pause
                                 else Icons.Default.PlayArrow,
                                 contentDescription = when {
+                                    preparingId == item.id -> "Preparing recording"
                                     playingId == item.id && !paused -> "Pause recording"
                                     playingId == item.id && paused -> "Resume recording"
                                     else -> "Play recording"
