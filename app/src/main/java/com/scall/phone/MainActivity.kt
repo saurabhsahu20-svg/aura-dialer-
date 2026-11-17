@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         repository = PhoneRepository(applicationContext)
+        com.scall.phone.telecom.MissedCallBadges.refresh(applicationContext)
         readDialIntent(intent)
         setContent {
             SCallApp(
@@ -64,6 +65,7 @@ class MainActivity : ComponentActivity() {
         // when Activity immediately enters onResume, or on quick app transitions.
         if (lastResumeAt > 0L && now - lastResumeAt >= 1000L) {
             refreshVersion++
+            com.scall.phone.telecom.MissedCallBadges.refresh(applicationContext)
         }
         lastResumeAt = now
     }
