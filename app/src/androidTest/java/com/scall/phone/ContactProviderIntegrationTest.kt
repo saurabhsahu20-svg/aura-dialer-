@@ -19,12 +19,16 @@ class ContactProviderIntegrationTest {
     fun realAndroidProviderCreatesEditsReadsAndDeletesContact() = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
-        instrumentation.uiAutomation.grantRuntimePermission(
-            context.packageName, Manifest.permission.READ_CONTACTS
-        )
-        instrumentation.uiAutomation.grantRuntimePermission(
-            context.packageName, Manifest.permission.WRITE_CONTACTS
-        )
+        // UiAutomation.grantRuntimePermission(package, permission) is not present
+        // on Android 6/8. The shell command works on API 23+ test emulators.
+        for (permission in listOf(
+            Manifest.permission.READ_CONTACTS, Manifest.permission.WRITE_CONTACTS
+        )) {
+            val command = "pm grant ${context.packageName} $permission"
+            instrumentation.uiAutomation.executeShellCommand(command).use { pipe ->
+                java.io.FileInputStream(pipe.fileDescriptor).use { it.readBytes() }
+            }
+        }
         val manager = ContactManager(context)
         assertTrue(manager.canRead() && manager.canWrite())
         val person = ManagedContact(
