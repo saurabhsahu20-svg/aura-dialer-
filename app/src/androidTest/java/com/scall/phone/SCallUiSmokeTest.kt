@@ -35,14 +35,19 @@ class SCallUiSmokeTest {
     fun repeatedExternalDialRequestReopensTheSameNumber() {
         val intent = android.content.Intent(
             android.content.Intent.ACTION_DIAL,
-            android.net.Uri.parse("tel:5550102")
+            android.net.Uri.parse("tel:5550102"),
+            rule.activity,
+            MainActivity::class.java
+        ).addFlags(
+            android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
         )
-        rule.activity.runOnUiThread { rule.activity.onNewIntent(intent) }
+        rule.activity.runOnUiThread { rule.activity.startActivity(intent) }
         rule.waitForIdle()
         rule.onNodeWithText("Clear").performClick()
         rule.onNodeWithText("Paste").assertExists()
         // Android may deliver the same ACTION_DIAL URI more than once.
-        rule.activity.runOnUiThread { rule.activity.onNewIntent(intent) }
+        rule.activity.runOnUiThread { rule.activity.startActivity(intent) }
         rule.waitForIdle()
         rule.onNodeWithText("Clear").assertExists()
     }
