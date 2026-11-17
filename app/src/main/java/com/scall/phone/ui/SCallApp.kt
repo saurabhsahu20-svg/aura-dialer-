@@ -337,6 +337,40 @@ internal fun SCallApp(
         }
     }
 
+    // VCF Import hands the selected document to a compatible Android Contacts importer.
+    // No contact data is uploaded to S Caller or a third party by this app.
+    val importVcf = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                context.startActivity(Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "text/x-vcard")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                })
+            } catch (_: Exception) {
+                Toast.makeText(context, "No compatible VCF importer available on this device",
+                    Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    val exportVcf = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/x-vcard")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            actionScope.launch {
+                try {
+                    val count = contactsManager.exportBasicVcard(contacts.map { it.id }, uri)
+                    Toast.makeText(context,
+                        "Exported $count basic VCF contacts. Photos and groups are not included.",
+                        Toast.LENGTH_LONG).show()
+                } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+                catch (_: Exception) {
+                    Toast.makeText(context, "VCF export failed. Check the selected destination.",
+                        Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
     val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) newPhoto = uri // Preview first; do not change saved image yet.
     }
@@ -806,7 +840,12 @@ internal fun SCallApp(
                                     managedContactEditing = false
                                     contactBackSignal = 0
                                 },
-                                onPhoto = ::openPhotoEditor
+                                onPhoto = ::openPhotoEditor,
+                                onImport = { importVcf.launch(arrayOf("text/x-vcard", "text/vcard", "text/plain")) },
+                                onExport = {
+                                    if (repository.hasContactsPermission()) exportVcf.launch("S_Caller_Contacts.vcf")
+                                    else requestContactPermissions()
+                                }
                             )
                             "Favorites" -> ContactsScreen(
                                 manager = contactsManager,
@@ -821,6 +860,11 @@ internal fun SCallApp(
                                     contactBackSignal = 0
                                 },
                                 onPhoto = ::openPhotoEditor,
+                                onImport = { importVcf.launch(arrayOf("text/x-vcard", "text/vcard", "text/plain")) },
+                                onExport = {
+                                    if (repository.hasContactsPermission()) exportVcf.launch("S_Caller_Contacts.vcf")
+                                    else requestContactPermissions()
+                                },
                                 emptyTitle = "No favorites yet"
                             )
                             else -> RecentsScreen(
@@ -970,6 +1014,7 @@ private fun ContactsScreen(
     swipesEnabled: Boolean, onCall: (String) -> Unit, onMessage: (String) -> Unit,
     onContact: (ContactEntry) -> Unit,
     onPhoto: (ContactEntry) -> Unit,
+    onImport: () -> Unit, onExport: () -> Unit,
     emptyTitle: String = "No contacts found"
 ) {
     var section by remember { mutableStateOf("Contacts") }
@@ -1019,6 +1064,23 @@ private fun ContactsScreen(
                             })
                         }
                     }
+                }
+            }
+        }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(onClick = onImport, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.FileOpen, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text("Import VCF")
+                }
+                OutlinedButton(onClick = onExport, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.FileDownload, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text("Export VCF")
                 }
             }
         }
