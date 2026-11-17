@@ -1,4 +1,4 @@
-package com.scall.phone.data
+package com.scall.PhoneRow.data
 
 import android.Manifest
 import android.content.ContentProviderOperation
@@ -30,14 +30,15 @@ internal data class ManagedContact(
 }
 
 /** Android ContactsContract is the source of truth; no invented/synced contact records. */
+private typealias DataRow = ContactsContract.Data
+private typealias RawRow = ContactsContract.RawContacts
+private typealias PersonRow = ContactsContract.Contacts
+private typealias PhoneRow = ContactsContract.CommonDataKinds.Phone
+private typealias EmailRow = ContactsContract.CommonDataKinds.Email
+private typealias NameRow = ContactsContract.CommonDataKinds.StructuredName
+
 internal class ContactManager(private val context: Context) {
     private val resolver = context.contentResolver
-    private val data = ContactsContract.Data
-    private val raw = ContactsContract.RawContacts
-    private val contacts = ContactsContract.Contacts
-    private val phone = ContactsContract.CommonDataKinds.Phone
-    private val email = ContactsContract.CommonDataKinds.Email
-    private val name = ContactsContract.CommonDataKinds.StructuredName
 
     fun canRead() = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) ==
         PackageManager.PERMISSION_GRANTED
@@ -48,8 +49,8 @@ internal class ContactManager(private val context: Context) {
         if (!canRead()) return@withContext emptyList()
         val accounts = linkedSetOf<Pair<String?, String?>>(null to null)
         try {
-            resolver.query(raw.CONTENT_URI, arrayOf(raw.ACCOUNT_NAME, raw.ACCOUNT_TYPE),
-                "${raw.DELETED}=0", null, null)?.use { c ->
+            resolver.query(RawRow.CONTENT_URI, arrayOf(RawRow.ACCOUNT_NAME, RawRow.ACCOUNT_TYPE),
+                "${RawRow.DELETED}=0", null, null)?.use { c ->
                 while (c.moveToNext()) accounts += c.getString(0) to c.getString(1)
             }
         } catch (_: SecurityException) { }
@@ -62,31 +63,31 @@ internal class ContactManager(private val context: Context) {
      */
     suspend fun load(contactId: Long): ManagedContact? = withContext(Dispatchers.IO) {
         if (!canRead() || contactId <= 0) return@withContext null
-        val rawId = resolver.query(raw.CONTENT_URI, arrayOf(raw._ID),
-            "${raw.CONTACT_ID}=? AND ${raw.DELETED}=0",
-            arrayOf(contactId.toString()), "${raw._ID} ASC")?.use {
+        val rawId = resolver.query(RawRow.CONTENT_URI, arrayOf(RawRow._ID),
+            "${RawRow.CONTACT_ID}=? AND ${RawRow.DELETED}=0",
+            arrayOf(contactId.toString()), "${RawRow._ID} ASC")?.use {
                 if (it.moveToFirst()) it.getLong(0) else null
             } ?: return@withContext null
         var result = ManagedContact(id = contactId, rawId = rawId, phones = emptyList())
         val phones = mutableListOf<ContactValue>()
         val emails = mutableListOf<ContactValue>()
-        resolver.query(data.CONTENT_URI, arrayOf(data._ID, data.MIMETYPE,
-            data.DATA1, data.DATA2, data.DATA3, data.DATA4, data.DATA5,
-            data.DATA6, data.DATA7, data.DATA8, data.DATA9, data.DATA10),
-            "${data.RAW_CONTACT_ID}=?", arrayOf(rawId.toString()), null)?.use { c ->
+        resolver.query(DataRow.CONTENT_URI, arrayOf(DataRow._ID, DataRow.MIMETYPE,
+            DataRow.DATA1, DataRow.DATA2, DataRow.DATA3, DataRow.DATA4, DataRow.DATA5,
+            DataRow.DATA6, DataRow.DATA7, DataRow.DATA8, DataRow.DATA9, DataRow.DATA10),
+            "${DataRow.RAW_CONTACT_ID}=?", arrayOf(rawId.toString()), null)?.use { c ->
             while (c.moveToNext()) {
                 val id = c.getLong(0)
                 fun v(index: Int) = c.getString(index).orEmpty()
                 when (v(1)) {
-                    name.CONTENT_ITEM_TYPE -> result = result.copy(first = v(3), middle = v(6), last = v(4))
-                    phone.CONTENT_ITEM_TYPE -> phones += ContactValue(v(2),
+                    NameRow.CONTENT_ITEM_TYPE -> result = result.copy(first = v(3), middle = v(6), last = v(4))
+                    PhoneRow.CONTENT_ITEM_TYPE -> phones += ContactValue(v(2),
                         phoneLabel(v(3), v(4)), id)
-                    email.CONTENT_ITEM_TYPE -> emails += ContactValue(v(2),
+                    EmailRow.CONTENT_ITEM_TYPE -> emails += ContactValue(v(2),
                         emailLabel(v(3), v(4)), id)
-                    ContactsContract.CommonDataKinds.Nickname.CONTENT_ITEM_TYPE ->
+                    ContactsContract.CommonDataKinds.NickNameRow.CONTENT_ITEM_TYPE ->
                         result = result.copy(nickname = v(2))
                     ContactsContract.CommonDataKinds.Organization.CONTENT_ITEM_TYPE ->
-                        result = result.copy(company = v(2), jobTitle = v(3), department = v(7))
+                        result = result.copy(company = v(2), jobTitle = v(5), department = v(6))
                     ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE ->
                         result = result.copy(notes = v(2))
                     ContactsContract.CommonDataKinds.Website.CONTENT_ITEM_TYPE ->
@@ -106,9 +107,9 @@ internal class ContactManager(private val context: Context) {
                 }
             }
         }
-        resolver.query(contacts.CONTENT_URI,
-            arrayOf(contacts.DISPLAY_NAME_PRIMARY, contacts.STARRED, contacts.PHOTO_URI),
-            "${contacts._ID}=?", arrayOf(contactId.toString()), null)?.use { c ->
+        resolver.query(PersonRow.CONTENT_URI,
+            arrayOf(PersonRow.DISPLAY_NAME_PRIMARY, PersonRow.STARRED, PersonRow.PHOTO_URI),
+            "${PersonRow._ID}=?", arrayOf(contactId.toString()), null)?.use { c ->
             if (c.moveToFirst()) {
                 if (result.fullName.isBlank()) result = result.copy(first = c.getString(0).orEmpty())
                 result = result.copy(favorite = c.getInt(1) != 0, photo = c.getString(2))
@@ -117,12 +118,12 @@ internal class ContactManager(private val context: Context) {
         result.copy(phones = phones.ifEmpty { listOf(ContactValue()) }, emails = emails)
     }
 
-    /** Aggregated numbers may live in several synced raw contacts. */
+    /** Aggregated numbers may live in several synced raw PersonRow. */
     suspend fun numbers(contactId: Long): List<ContactValue> = withContext(Dispatchers.IO) {
         if (!canRead()) return@withContext emptyList()
         val found = mutableListOf<ContactValue>()
-        resolver.query(phone.CONTENT_URI, arrayOf(phone.NUMBER, phone.TYPE, phone.LABEL),
-            "${phone.CONTACT_ID}=?", arrayOf(contactId.toString()), null)?.use { c ->
+        resolver.query(PhoneRow.CONTENT_URI, arrayOf(PhoneRow.NUMBER, PhoneRow.TYPE, PhoneRow.LABEL),
+            "${PhoneRow.CONTACT_ID}=?", arrayOf(contactId.toString()), null)?.use { c ->
             while (c.moveToNext()) found += ContactValue(c.getString(0).orEmpty(),
                 phoneLabel(c.getString(1), c.getString(2)))
         }
@@ -151,47 +152,47 @@ internal class ContactManager(private val context: Context) {
             val creating = person.id == 0L
             if (!creating) require(person.rawId > 0L) { "The contact is no longer available" }
             val ops = arrayListOf<ContentProviderOperation>()
-            if (creating) ops += ContentProviderOperation.newInsert(raw.CONTENT_URI)
-                .withValue(raw.ACCOUNT_NAME, account?.name)
-                .withValue(raw.ACCOUNT_TYPE, account?.type).build()
+            if (creating) ops += ContentProviderOperation.newInsert(RawRow.CONTENT_URI)
+                .withValue(RawRow.ACCOUNT_NAME, account?.name)
+                .withValue(RawRow.ACCOUNT_TYPE, account?.type).build()
             val existing = mutableMapOf<String, MutableList<Long>>()
-            if (!creating) resolver.query(data.CONTENT_URI, arrayOf(data._ID, data.MIMETYPE),
-                "${data.RAW_CONTACT_ID}=?", arrayOf(person.rawId.toString()), null)?.use { c ->
+            if (!creating) resolver.query(DataRow.CONTENT_URI, arrayOf(DataRow._ID, DataRow.MIMETYPE),
+                "${DataRow.RAW_CONTACT_ID}=?", arrayOf(person.rawId.toString()), null)?.use { c ->
                 while (c.moveToNext()) existing.getOrPut(c.getString(1).orEmpty()) {
                     mutableListOf()
                 }.add(c.getLong(0))
             }
             fun ins(mime: String, values: Map<String, Any?>): ContentProviderOperation {
-                val builder = ContentProviderOperation.newInsert(data.CONTENT_URI)
-                    .withValue(data.MIMETYPE, mime)
-                if (creating) builder.withValueBackReference(data.RAW_CONTACT_ID, 0)
-                else builder.withValue(data.RAW_CONTACT_ID, person.rawId)
+                val builder = ContentProviderOperation.newInsert(DataRow.CONTENT_URI)
+                    .withValue(DataRow.MIMETYPE, mime)
+                if (creating) builder.withValueBackReference(DataRow.RAW_CONTACT_ID, 0)
+                else builder.withValue(DataRow.RAW_CONTACT_ID, person.rawId)
                 values.forEach { (k, v) -> builder.withValue(k, v) }
                 return builder.build()
             }
             fun upd(id: Long, values: Map<String, Any?>): ContentProviderOperation {
-                val builder = ContentProviderOperation.newUpdate(data.CONTENT_URI)
-                    .withSelection("${data._ID}=? AND ${data.RAW_CONTACT_ID}=?",
+                val builder = ContentProviderOperation.newUpdate(DataRow.CONTENT_URI)
+                    .withSelection("${DataRow._ID}=? AND ${DataRow.RAW_CONTACT_ID}=?",
                         arrayOf(id.toString(), person.rawId.toString()))
                 values.forEach { (k, v) -> builder.withValue(k, v) }
                 return builder.build()
             }
-            fun delete(id: Long) = ContentProviderOperation.newDelete(data.CONTENT_URI)
-                .withSelection("${data._ID}=? AND ${data.RAW_CONTACT_ID}=?",
+            fun delete(id: Long) = ContentProviderOperation.newDelete(DataRow.CONTENT_URI)
+                .withSelection("${DataRow._ID}=? AND ${DataRow.RAW_CONTACT_ID}=?",
                     arrayOf(id.toString(), person.rawId.toString())).build()
             fun single(mime: String, values: Map<String, Any?>, enabled: Boolean) {
                 val id = existing[mime]?.firstOrNull()
                 if (enabled) ops += if (id == null) ins(mime, values) else upd(id, values)
                 else if (id != null) ops += delete(id)
             }
-            single(name.CONTENT_ITEM_TYPE, mapOf(name.GIVEN_NAME to person.first.trim(),
-                name.MIDDLE_NAME to person.middle.trim(), name.FAMILY_NAME to person.last.trim()), true)
+            single(NameRow.CONTENT_ITEM_TYPE, mapOf(NameRow.GIVEN_NAME to person.first.trim(),
+                NameRow.MIDDLE_NAME to person.middle.trim(), NameRow.FAMILY_NAME to person.last.trim()), true)
             fun repeated(mime: String, rows: List<ContactValue>, typeKey: String,
                          labelKey: String, type: (String) -> Int) {
                 val retained = mutableSetOf<Long>()
                 rows.filter { it.value.isNotBlank() }.forEach { row ->
                     val kind = type(row.label)
-                    val values = mapOf(data.DATA1 to row.value.trim(), typeKey to kind,
+                    val values = mapOf(DataRow.DATA1 to row.value.trim(), typeKey to kind,
                         labelKey to if (kind == 0) row.label else null)
                     val id = row.rowId.takeIf { it in existing[mime].orEmpty() }
                     if (id == null) ops += ins(mime, values)
@@ -200,10 +201,10 @@ internal class ContactManager(private val context: Context) {
                 // Deletion is scoped to explicitly removed rows of the edited raw only.
                 existing[mime].orEmpty().filterNot { it in retained }.forEach { ops += delete(it) }
             }
-            repeated(phone.CONTENT_ITEM_TYPE, person.phones, phone.TYPE, phone.LABEL, ::phoneType)
-            repeated(email.CONTENT_ITEM_TYPE, person.emails, email.TYPE, email.LABEL, ::emailType)
+            repeated(PhoneRow.CONTENT_ITEM_TYPE, person.phones, PhoneRow.TYPE, PhoneRow.LABEL, ::phoneType)
+            repeated(EmailRow.CONTENT_ITEM_TYPE, person.emails, EmailRow.TYPE, EmailRow.LABEL, ::emailType)
             val n = ContactsContract.CommonDataKinds.Nickname
-            single(n.CONTENT_ITEM_TYPE, mapOf(n.NAME to person.nickname.trim()), person.nickname.isNotBlank())
+            single(n.CONTENT_ITEM_TYPE, mapOf(n.NAME to person.nickNameRow.trim()), person.nickNameRow.isNotBlank())
             val o = ContactsContract.CommonDataKinds.Organization
             single(o.CONTENT_ITEM_TYPE, mapOf(o.COMPANY to person.company.trim(),
                 o.TITLE to person.jobTitle.trim(), o.DEPARTMENT to person.department.trim()),
@@ -225,7 +226,7 @@ internal class ContactManager(private val context: Context) {
             // Query event types so a birthday edit never silently overwrites an anniversary.
             fun putDate(type: Int, value: String) {
                 val matched = existing[event.CONTENT_ITEM_TYPE].orEmpty().firstOrNull { row ->
-                    resolver.query(data.CONTENT_URI, arrayOf(event.TYPE), "${data._ID}=?",
+                    resolver.query(DataRow.CONTENT_URI, arrayOf(event.TYPE), "${DataRow._ID}=?",
                         arrayOf(row.toString()), null)?.use { c ->
                         c.moveToFirst() && c.getInt(0) == type
                     } ?: false
@@ -241,8 +242,8 @@ internal class ContactManager(private val context: Context) {
             val contactId = if (creating) {
                 val newRawId = saved.firstOrNull()?.uri?.lastPathSegment?.toLongOrNull()
                     ?: throw IllegalStateException("Contact saved but ID unavailable")
-                resolver.query(raw.CONTENT_URI, arrayOf(raw.CONTACT_ID),
-                    "${raw._ID}=?", arrayOf(newRawId.toString()), null)?.use { c ->
+                resolver.query(RawRow.CONTENT_URI, arrayOf(RawRow.CONTACT_ID),
+                    "${RawRow._ID}=?", arrayOf(newRawId.toString()), null)?.use { c ->
                     if (c.moveToFirst()) c.getLong(0) else 0L
                 } ?: 0L
             } else person.id
@@ -254,46 +255,46 @@ internal class ContactManager(private val context: Context) {
         if (!canWrite()) false else setFavoriteDirect(contactId, starred)
     }
     private fun setFavoriteDirect(id: Long, starred: Boolean): Boolean {
-        val values = ContentValues().apply { put(contacts.STARRED, if (starred) 1 else 0) }
-        return resolver.update(Uri.withAppendedPath(contacts.CONTENT_URI, id.toString()), values, null, null) > 0
+        val values = ContentValues().apply { put(PersonRow.STARRED, if (starred) 1 else 0) }
+        return resolver.update(Uri.withAppendedPath(PersonRow.CONTENT_URI, id.toString()), values, null, null) > 0
     }
     suspend fun delete(contactId: Long) = withContext(Dispatchers.IO) {
         if (!canWrite()) false else resolver.delete(
-            Uri.withAppendedPath(contacts.CONTENT_URI, contactId.toString()), null, null) > 0
+            Uri.withAppendedPath(PersonRow.CONTENT_URI, contactId.toString()), null, null) > 0
     }
     fun vcardUri(contactId: Long): Uri? {
         if (!canRead()) return null
-        val key = resolver.query(Uri.withAppendedPath(contacts.CONTENT_URI, contactId.toString()),
-            arrayOf(contacts.LOOKUP_KEY), null, null, null)?.use { c ->
+        val key = resolver.query(Uri.withAppendedPath(PersonRow.CONTENT_URI, contactId.toString()),
+            arrayOf(PersonRow.LOOKUP_KEY), null, null, null)?.use { c ->
             if (c.moveToFirst()) c.getString(0) else null
         } ?: return null
-        return Uri.withAppendedPath(contacts.CONTENT_VCARD_URI, Uri.encode(key))
+        return Uri.withAppendedPath(PersonRow.CONTENT_VCARD_URI, Uri.encode(key))
     }
 
     private fun phoneType(label: String) = when (label.lowercase()) {
-        "mobile" -> phone.TYPE_MOBILE
-        "home" -> phone.TYPE_HOME
-        "work" -> phone.TYPE_WORK
-        "other" -> phone.TYPE_OTHER
-        else -> phone.TYPE_CUSTOM
+        "mobile" -> PhoneRow.TYPE_MOBILE
+        "home" -> PhoneRow.TYPE_HOME
+        "work" -> PhoneRow.TYPE_WORK
+        "other" -> PhoneRow.TYPE_OTHER
+        else -> PhoneRow.TYPE_CUSTOM
     }
     private fun emailType(label: String) = when (label.lowercase()) {
-        "personal", "home" -> email.TYPE_HOME
-        "work" -> email.TYPE_WORK
-        "other" -> email.TYPE_OTHER
-        else -> email.TYPE_CUSTOM
+        "personal", "home" -> EmailRow.TYPE_HOME
+        "work" -> EmailRow.TYPE_WORK
+        "other" -> EmailRow.TYPE_OTHER
+        else -> EmailRow.TYPE_CUSTOM
     }
     private fun phoneLabel(type: String?, custom: String?) = when (type?.toIntOrNull()) {
-        phone.TYPE_MOBILE -> "Mobile"
-        phone.TYPE_HOME -> "Home"
-        phone.TYPE_WORK -> "Work"
-        phone.TYPE_OTHER -> "Other"
+        PhoneRow.TYPE_MOBILE -> "Mobile"
+        PhoneRow.TYPE_HOME -> "Home"
+        PhoneRow.TYPE_WORK -> "Work"
+        PhoneRow.TYPE_OTHER -> "Other"
         else -> custom?.takeIf { it.isNotBlank() } ?: "Other"
     }
     private fun emailLabel(type: String?, custom: String?) = when (type?.toIntOrNull()) {
-        email.TYPE_HOME -> "Personal"
-        email.TYPE_WORK -> "Work"
-        email.TYPE_OTHER -> "Other"
+        EmailRow.TYPE_HOME -> "Personal"
+        EmailRow.TYPE_WORK -> "Work"
+        EmailRow.TYPE_OTHER -> "Other"
         else -> custom?.takeIf { it.isNotBlank() } ?: "Other"
     }
 }
