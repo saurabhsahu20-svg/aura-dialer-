@@ -16,6 +16,8 @@ import kotlinx.coroutines.withContext
 
 internal data class ContactValue(val value: String = "", val label: String = "Mobile", val rowId: Long = 0L)
 internal data class ContactAccount(val name: String?, val type: String?, val label: String)
+internal data class ContactGroup(val id: Long, val title: String)
+
 internal data class ManagedContact(
     val id: Long = 0L, val rawId: Long = 0L,
     val first: String = "", val middle: String = "", val last: String = "",
@@ -47,6 +49,37 @@ internal class ContactManager(private val context: Context) {
         PackageManager.PERMISSION_GRANTED
     fun canWrite() = ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_CONTACTS) ==
         PackageManager.PERMISSION_GRANTED
+
+    /** Read existing Android provider groups without modifying synced account groups. */
+    suspend fun groups(): List<ContactGroup> = withContext(Dispatchers.IO) {
+        if (!canRead()) return@withContext emptyList()
+        val result = mutableListOf<ContactGroup>()
+        try {
+            resolver.query(ContactsContract.Groups.CONTENT_URI,
+                arrayOf(ContactsContract.Groups._ID, ContactsContract.Groups.TITLE),
+                "${ContactsContract.Groups.DELETED}=0", null,
+                "${ContactsContract.Groups.TITLE} COLLATE NOCASE ASC")?.use { c ->
+                while (c.moveToNext()) {
+                    val title = c.getString(1).orEmpty()
+                    if (title.isNotBlank()) result += ContactGroup(c.getLong(0), title)
+                }
+            }
+        } catch (_: SecurityException) { }
+        result.distinctBy { it.id }
+    }
+
+    suspend fun members(groupId: Long): Set<Long> = withContext(Dispatchers.IO) {
+        if (!canRead() || groupId <= 0) return@withContext emptySet()
+        val result = mutableSetOf<Long>()
+        resolver.query(ContactsContract.Data.CONTENT_URI,
+            arrayOf(ContactsContract.Data.CONTACT_ID),
+            "${ContactsContract.Data.MIMETYPE}=? AND ${ContactsContract.CommonDataKinds.GroupMembership.GROUP_ROW_ID}=?",
+            arrayOf(ContactsContract.CommonDataKinds.GroupMembership.CONTENT_ITEM_TYPE, groupId.toString()),
+            null)?.use { c ->
+            while (c.moveToNext()) result += c.getLong(0)
+        }
+        result
+    }
 
     suspend fun accounts(): List<ContactAccount> = withContext(Dispatchers.IO) {
         if (!canRead()) return@withContext emptyList()
