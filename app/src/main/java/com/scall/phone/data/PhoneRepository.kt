@@ -21,7 +21,10 @@ internal data class ContactEntry(
     val name: String,
     val number: String,
     val photo: String?,
-    val favorite: Boolean
+    val favorite: Boolean,
+    val allNumbers: List<String> = listOf(number),
+    val nickname: String = "",
+    val company: String = ""
 )
 
 internal data class RecentEntry(
@@ -60,7 +63,10 @@ internal class PhoneRepository(private val context: Context) {
 
     suspend fun contacts(): List<ContactEntry> = withContext(Dispatchers.IO) {
         if (!hasContactsPermission()) return@withContext emptyList()
-        val list = mutableListOf<ContactEntry>()
+        val byId = linkedMapOf<Long, ContactEntry>()
+        val numbers = mutableMapOf<Long, MutableList<String>>()
+        val nicknames = mutableMapOf<Long, String>()
+        val companies = mutableMapOf<Long, String>()
         val projection = arrayOf(
             ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
             ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
@@ -75,27 +81,55 @@ internal class PhoneRepository(private val context: Context) {
                 null, null,
                 "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} COLLATE NOCASE ASC"
             )?.use { cursor ->
-                val seen = mutableSetOf<String>()
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(0)
                     val name = cursor.getString(1).orEmpty().ifBlank { "Unknown" }
                     val number = cursor.getString(2).orEmpty()
                     if (number.isBlank()) continue
-                    val uniqueKey = "$id:${normalizeNumber(number)}"
-                    if (!seen.add(uniqueKey)) continue
-                    list += ContactEntry(id, name, number, cursor.getString(3), cursor.getInt(4) == 1)
+                    val collected = numbers.getOrPut(id) { mutableListOf() }
+                    if (collected.none { normalizeNumber(it) == normalizeNumber(number) }) {
+                        collected += number
+                    }
+                    if (id !in byId) {
+                        byId[id] = ContactEntry(id, name, number,
+                            cursor.getString(3), cursor.getInt(4) == 1)
+                    }
+                }
+            }
+            // Searchable nickname and company metadata are loaded once off the UI thread.
+            // This never requires additional permissions or external services.
+            if (byId.isNotEmpty()) {
+                val nickMime = ContactsContract.CommonDataKinds.Nickname.CONTENT_ITEM_TYPE
+                val orgMime = ContactsContract.CommonDataKinds.Organization.CONTENT_ITEM_TYPE
+                context.contentResolver.query(ContactsContract.Data.CONTENT_URI,
+                    arrayOf(ContactsContract.Data.CONTACT_ID, ContactsContract.Data.MIMETYPE,
+                        ContactsContract.Data.DATA1),
+                    "${ContactsContract.Data.MIMETYPE}=? OR ${ContactsContract.Data.MIMETYPE}=?",
+                    arrayOf(nickMime, orgMime), null)?.use { cursor ->
+                    while (cursor.moveToNext()) {
+                        val id = cursor.getLong(0)
+                        if (id in byId) {
+                            if (cursor.getString(1) == nickMime) nicknames[id] = cursor.getString(2).orEmpty()
+                            else companies[id] = cursor.getString(2).orEmpty()
+                        }
+                    }
                 }
             }
         } catch (error: Exception) {
             if (error is kotlinx.coroutines.CancellationException) throw error
             android.util.Log.w("SCall", "Contacts provider unavailable", error)
         }
-        list
+        byId.map { (id, entry) ->
+            entry.copy(allNumbers = numbers[id].orEmpty(),
+                nickname = nicknames[id].orEmpty(), company = companies[id].orEmpty())
+        }
     }
 
     suspend fun recentCalls(contacts: List<ContactEntry>): List<RecentEntry> = withContext(Dispatchers.IO) {
         if (!hasLogsPermission()) return@withContext emptyList()
-        val byNumber = contacts.associateBy { normalizeNumber(it.number).takeLast(10) }
+        val byNumber = contacts.flatMap { item ->
+            item.allNumbers.map { normalizeNumber(it).takeLast(10) to item }
+        }.toMap()
         val recent = mutableListOf<RecentEntry>()
         try {
             context.contentResolver.query(
