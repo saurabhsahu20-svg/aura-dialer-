@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.telecom.PhoneAccountHandle
+import android.telecom.Call
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
@@ -535,11 +536,25 @@ internal fun SCallApp(
                     TopAppBar(
                         title = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                androidx.compose.foundation.Image(
-                                    painter = painterResource(R.drawable.scall_bottle_green_call_icon),
-                                    contentDescription = "S call logo",
-                                    modifier = Modifier.size(34.dp)
-                                )
+                                Box {
+                                    androidx.compose.foundation.Image(
+                                        painter = painterResource(R.drawable.scall_bottle_green_call_icon),
+                                        contentDescription = "S call logo",
+                                        modifier = Modifier.size(34.dp)
+                                    )
+                                    if (currentCall?.state == Call.STATE_RINGING || unreadMissedCalls > 0) {
+                                        Badge(
+                                            modifier = Modifier.align(Alignment.TopEnd).offset(x = 7.dp, y = (-5).dp),
+                                            containerColor = Color(0xFFF44336),
+                                            contentColor = Color.White
+                                        ) {
+                                            if (unreadMissedCalls > 0) {
+                                                Text(if (unreadMissedCalls > 9) "9+" else unreadMissedCalls.toString(),
+                                                    fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
                                 Spacer(Modifier.width(11.dp))
                                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                     Text("S Call", fontWeight = FontWeight.Bold,
@@ -572,7 +587,17 @@ internal fun SCallApp(
                         tabs.forEach { tab ->
                             NavigationBarItem(
                                 selected = page == tab.label,
-                                onClick = { navigateTo(tab.label); query = "" },
+                                onClick = {
+                                    navigateTo(tab.label); query = ""
+                                    if (tab.label == "Recents") {
+                                        actionScope.launch {
+                                            if (repository.markMissedCallsRead()) {
+                                                MissedCallBadges.refresh(context)
+                                                localRefresh++
+                                            }
+                                        }
+                                    }
+                                },
                                 icon = {
                                     Box {
                                         Icon(tab.icon, contentDescription = tab.label)
