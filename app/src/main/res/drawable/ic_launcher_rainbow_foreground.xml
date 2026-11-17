@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Keeps the full circular logo in the 72dp adaptive-icon safe zone. -->
+<!-- Keeps the original handset logo in the 72dp adaptive-icon safe zone. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item
-        android:left="18dp"
-        android:top="18dp"
-        android:right="18dp"
-        android:bottom="18dp"
-        android:drawable="@drawable/scall_rainbow_call_logo" />
+        android:left="8dp"
+        android:top="8dp"
+        android:right="8dp"
+        android:bottom="8dp"
+        android:drawable="@drawable/scall_brand_icon" />
 </layer-list>
