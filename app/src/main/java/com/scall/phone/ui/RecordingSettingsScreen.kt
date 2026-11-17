@@ -52,12 +52,14 @@ internal fun RecordingSettingsScreen() {
     var cleanupConfirm by remember { mutableStateOf(false) }
     var playingId by remember { mutableStateOf<String?>(null) }
     var paused by remember { mutableStateOf(false) }
+    var preparingId by remember { mutableStateOf<String?>(null) }
     var player by remember { mutableStateOf<MediaPlayer?>(null) }
 
     fun stopPlayback() {
         val active = player
         player = null
         playingId = null
+        preparingId = null
         paused = false
         runCatching { active?.stop() }
         runCatching { active?.release() }
@@ -67,13 +69,29 @@ internal fun RecordingSettingsScreen() {
         onDispose {
             runCatching { player?.release() }
             player = null
+            preparingId = null
         }
     }
 
     LaunchedEffect(refresh) {
-        recordings = store.all()
-        contactsByNumber = repository.contacts()
-            .associate { normalizeNumber(it.number).takeLast(10) to it.name }
+        try {
+            recordings = store.all()
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            android.util.Log.e("SCallRecording", "Recording library unavailable", error)
+            Toast.makeText(context, "Could not load recordings", Toast.LENGTH_SHORT).show()
+        }
+        // Contact lookup is optional: a contact permission change must not hide
+        // the private recordings the user already has.
+        try {
+            contactsByNumber = repository.contacts()
+                .associate { normalizeNumber(it.number).takeLast(10) to it.name }
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            android.util.Log.w("SCallRecording", "Contact names unavailable", error)
+        }
     }
 
     val importPicker = rememberLauncherForActivityResult(
@@ -100,11 +118,14 @@ internal fun RecordingSettingsScreen() {
 
     fun playOrPause(recording: SavedRecording) {
         if (playingId == recording.id) {
+            if (preparingId == recording.id) return // Ignore taps until ready.
             try {
-                if (paused) player?.start() else player?.pause()
+                val active = player ?: return
+                if (paused) active.start() else active.pause()
                 paused = !paused
             } catch (_: RuntimeException) {
                 stopPlayback()
+                Toast.makeText(context, "Playback was interrupted", Toast.LENGTH_SHORT).show()
             }
             return
         }
@@ -116,22 +137,46 @@ internal fun RecordingSettingsScreen() {
         }
         val mp = MediaPlayer()
         try {
-            FileInputStream(audio).use { input ->
-                mp.setDataSource(input.fd)
-                mp.prepare()
+            FileInputStream(audio).use { input -> mp.setDataSource(input.fd) }
+            mp.setOnPreparedListener {
+                if (player !== mp || playingId != recording.id) return@setOnPreparedListener
+                preparingId = null
+                try {
+                    mp.start()
+                    paused = false
+                } catch (error: RuntimeException) {
+                    android.util.Log.w("SCallRecording", "Unable to play prepared audio", error)
+                    stopPlayback()
+                    Toast.makeText(context, "Audio playback failed", Toast.LENGTH_SHORT).show()
+                }
             }
             mp.setOnCompletionListener {
-                playingId = null
-                paused = false
-                player = null
+                if (player === mp) {
+                    playingId = null
+                    preparingId = null
+                    paused = false
+                    player = null
+                }
                 runCatching { mp.release() }
             }
-            mp.start()
+            mp.setOnErrorListener { _, _, _ ->
+                if (player === mp) {
+                    stopPlayback()
+                    Toast.makeText(context, "Cannot play this recording", Toast.LENGTH_SHORT).show()
+                } else {
+                    runCatching { mp.release() }
+                }
+                true
+            }
             player = mp
             playingId = recording.id
+            preparingId = recording.id
             paused = false
-        } catch (_: Exception) {
-            runCatching { mp.release() }
+            // Preparing long recordings synchronously here can freeze Compose.
+            mp.prepareAsync()
+        } catch (error: Exception) {
+            android.util.Log.w("SCallRecording", "Unable to initialize playback", error)
+            if (player === mp) stopPlayback() else runCatching { mp.release() }
             Toast.makeText(context, "Audio playback failed", Toast.LENGTH_LONG).show()
         }
     }
@@ -180,8 +225,16 @@ internal fun RecordingSettingsScreen() {
             confirmButton = {
                 TextButton(onClick = {
                     scope.launch {
-                        if (store.rename(selected.id, editTitle, editPhone)) refresh++
-                        selectedForEdit = null
+                        try {
+                            if (store.rename(selected.id, editTitle, editPhone)) refresh++
+                            else Toast.makeText(context, "Recording not found", Toast.LENGTH_SHORT).show()
+                            selectedForEdit = null
+                        } catch (error: kotlinx.coroutines.CancellationException) {
+                            throw error
+                        } catch (error: Exception) {
+                            android.util.Log.e("SCallRecording", "Rename failed", error)
+                            Toast.makeText(context, "Could not rename recording", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }) { Text("Save") }
             },
@@ -205,8 +258,16 @@ internal fun RecordingSettingsScreen() {
                 TextButton(onClick = {
                     if (playingId == selected.id) stopPlayback()
                     scope.launch {
-                        if (store.delete(selected.id)) refresh++
-                        selectedForDelete = null
+                        try {
+                            if (store.delete(selected.id)) refresh++
+                            else Toast.makeText(context, "Could not delete recording", Toast.LENGTH_SHORT).show()
+                            selectedForDelete = null
+                        } catch (error: kotlinx.coroutines.CancellationException) {
+                            throw error
+                        } catch (error: Exception) {
+                            android.util.Log.e("SCallRecording", "Delete failed", error)
+                            Toast.makeText(context, "Could not delete recording", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }) { Text("Delete") }
             },
@@ -229,9 +290,16 @@ internal fun RecordingSettingsScreen() {
                     cleanupConfirm = false
                     stopPlayback()
                     scope.launch {
-                        val count = store.cleanupExpired(retention)
-                        refresh++
-                        Toast.makeText(context, "Removed $count old imported files", Toast.LENGTH_SHORT).show()
+                        try {
+                            val count = store.cleanupExpired(retention)
+                            refresh++
+                            Toast.makeText(context, "Removed $count old files", Toast.LENGTH_SHORT).show()
+                        } catch (error: kotlinx.coroutines.CancellationException) {
+                            throw error
+                        } catch (error: Exception) {
+                            android.util.Log.e("SCallRecording", "Cleanup failed", error)
+                            Toast.makeText(context, "Could not clean up recordings", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }) { Text("Clean up") }
             },
@@ -241,10 +309,12 @@ internal fun RecordingSettingsScreen() {
         )
     }
 
-    val matches = recordings.filter {
-        search.isBlank() ||
-            it.title.contains(search, ignoreCase = true) ||
-            it.phoneNumber.contains(search)
+    val matches = remember(recordings, search) {
+        recordings.filter {
+            search.isBlank() ||
+                it.title.contains(search, ignoreCase = true) ||
+                it.phoneNumber.contains(search)
+        }
     }
 
     LazyColumn(
@@ -367,6 +437,7 @@ internal fun RecordingSettingsScreen() {
                                 if (playingId == item.id && !paused) Icons.Default.Pause
                                 else Icons.Default.PlayArrow,
                                 contentDescription = when {
+                                    preparingId == item.id -> "Preparing recording"
                                     playingId == item.id && !paused -> "Pause recording"
                                     playingId == item.id && paused -> "Resume recording"
                                     else -> "Play recording"

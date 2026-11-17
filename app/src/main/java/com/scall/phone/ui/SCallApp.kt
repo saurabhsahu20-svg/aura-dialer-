@@ -120,11 +120,21 @@ internal fun SCallApp(
         contacts.filter { it.favorite &&
             (query.isBlank() || it.name.contains(query, true) || it.number.contains(query)) }
     }
-    val matchedRecents = remember(recents, query, localRefresh) {
-        if (query.isBlank()) recents else recents.filter {
-            it.name.contains(query, true) || it.number.contains(query) ||
-                (historyStore.title(it)?.contains(query, true) == true) ||
-                historyStore.note(it).contains(query, true)
+    // Expensive call-note searches run off the UI thread. Fast consecutive
+    // keystrokes cancel older searches, keeping scrolling and dialpad responsive.
+    var matchedRecents by remember { mutableStateOf<List<RecentEntry>>(emptyList()) }
+    LaunchedEffect(recents, query, localRefresh) {
+        if (query.isBlank()) {
+            matchedRecents = recents
+        } else {
+            kotlinx.coroutines.delay(120)
+            matchedRecents = withContext(Dispatchers.Default) {
+                recents.filter {
+                    it.name.contains(query, true) || it.number.contains(query) ||
+                        (historyStore.title(it)?.contains(query, true) == true) ||
+                        historyStore.note(it).contains(query, true)
+                }
+            }
         }
     }
 
