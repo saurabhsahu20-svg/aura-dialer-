@@ -89,6 +89,7 @@ class SCallInCallService : InCallService() {
             }
         }
         updateCallNotification()
+        MissedCallBadges.refresh(this)
     }
 
     override fun onCallRemoved(call: Call) {
@@ -105,6 +106,9 @@ class SCallInCallService : InCallService() {
             android.util.Log.w("SCallInCallService", "Unable to remove disconnected call", error)
         }
         updateCallNotification()
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            MissedCallBadges.refresh(applicationContext)
+        }, 2000L)
         super.onCallRemoved(call)
     }
 

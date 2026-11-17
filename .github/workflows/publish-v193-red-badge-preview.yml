@@ -1,0 +1,80 @@
+name: Public S Caller v1.9.3 Red Badge Preview
+
+on:
+  push:
+    branches:
+      - feature/scaller-v193-red-badges
+    paths:
+      - .github/workflows/publish-v193-red-badge-preview.yml
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Install Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_MANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          "$SDK_MANAGER" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Verify source version and badge implementation
+        run: |
+          grep -q 'versionName = "1.9.3"' app/build.gradle.kts
+          test -s app/src/main/java/com/scall/phone/telecom/MissedCallBadges.kt
+          grep -q 'MissedCallBadges' app/src/main/java/com/scall/phone/ui/SCallApp.kt
+      - name: Unit tests lint and debug APK
+        run: gradle --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      - name: Verify APK identity and signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-output
+          cp app/build/outputs/apk/debug/app-debug.apk release-output/S-Caller-v1.9.3-Red-Badge-Preview.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose release-output/S-Caller-v1.9.3-Red-Badge-Preview.apk
+          BADGING="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging release-output/S-Caller-v1.9.3-Red-Badge-Preview.apk)"
+          echo "$BADGING" | grep -q "package: name='com.scall.phone'"
+          echo "$BADGING" | grep -q "versionName='1.9.3'"
+          (cd release-output && sha256sum S-Caller-v1.9.3-Red-Badge-Preview.apk > SHA256SUMS.txt)
+          (cd release-output && sha256sum -c SHA256SUMS.txt)
+      - name: Upload installation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: S-Caller-v1.9.3-Red-Badge-Preview
+          path: release-output/
+          if-no-files-found: error
+      - name: Publish public preview (not stable release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > notes.md <<'EOF'
+          S Caller v1.9.3 Red Badge PREVIEW
+          
+          Built from the v1.9.3 contacts branch with red in-app call indicators,
+          unread missed-call counting from Android call-log records, and standard
+          launcher notification badge support where supported.
+          
+          This is a DEBUG-SIGNED developer preview, NOT a stable production release.
+          Existing installations signed with a different certificate cannot be
+          upgraded in place. Back up your data before any uninstall.
+          Android launcher badge appearance varies; phone and permission testing
+          is still required on real devices.
+          EOF
+          gh release create v1.9.3-red-badge-preview release-output/* \
+            --target "$GITHUB_SHA" \
+            --title "S Caller v1.9.3 Red Badge — Developer Preview" \
+            --notes-file notes.md \
+            --prerelease
