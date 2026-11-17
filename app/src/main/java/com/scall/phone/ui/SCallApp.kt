@@ -72,6 +72,7 @@ private val tabs = listOf(
 internal fun SCallApp(
     repository: PhoneRepository,
     externalDialNumber: String,
+    externalDialRequestId: Int,
     refreshVersion: Int,
     requestDialerRole: () -> Unit,
     requestPermissions: () -> Unit
@@ -201,9 +202,9 @@ internal fun SCallApp(
             isLoading = false
         }
     }
-    LaunchedEffect(externalDialNumber) {
-        if (externalDialNumber.isNotEmpty()) {
-            dialNumber = externalDialNumber
+    LaunchedEffect(externalDialRequestId) {
+        if (externalDialRequestId > 0 && externalDialNumber.isNotBlank()) {
+            dialNumber = cleanDialNumber(externalDialNumber)
             navigateTo("Keypad")
         }
     }
@@ -343,11 +344,17 @@ internal fun SCallApp(
                 return
             }
         }
-        photos.save(contact.number, picked, style)
-        newPhoto = null
-        photoEditor = null
-        localRefresh++
-        Toast.makeText(context, "Caller photo saved", Toast.LENGTH_SHORT).show()
+        try {
+            photos.save(contact.number, picked, style)
+            newPhoto = null
+            photoEditor = null
+            localRefresh++
+            Toast.makeText(context, "Caller photo saved", Toast.LENGTH_SHORT).show()
+        } catch (error: Exception) {
+            android.util.Log.e("SCall", "Unable to save caller photo settings", error)
+            Toast.makeText(context, "Could not save photo. Check device storage.",
+                Toast.LENGTH_LONG).show()
+        }
     }
 
     SCallTheme(theme) {
@@ -439,9 +446,15 @@ internal fun SCallApp(
                 },
                 confirmButton = {
                     TextButton(onClick = {
-                        historyStore.save(row, historyTitle, historyNote)
-                        editingHistory = null
-                        localRefresh++
+                        try {
+                            historyStore.save(row, historyTitle, historyNote)
+                            editingHistory = null
+                            localRefresh++
+                        } catch (error: Exception) {
+                            android.util.Log.e("SCall", "Unable to save call note", error)
+                            Toast.makeText(context, "Could not save call note",
+                                Toast.LENGTH_SHORT).show()
+                        }
                     }) { Text("Save") }
                 },
                 dismissButton = {
@@ -524,8 +537,15 @@ internal fun SCallApp(
                                     contentDescription = "S call logo",
                                     modifier = Modifier.size(34.dp)
                                 )
-                                Spacer(Modifier.width(10.dp))
-                                Text("S call", fontWeight = FontWeight.Bold, letterSpacing = (-0.7).sp)
+                                Spacer(Modifier.width(11.dp))
+                                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                    Text("S Call", fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.titleLarge,
+                                        letterSpacing = (-0.45).sp)
+                                    Text("PHONE • CONTACTS", fontSize = 10.sp,
+                                        letterSpacing = 1.15.sp,
+                                        color = scheme.onSurfaceVariant)
+                                }
                             }
                         },
                         actions = {
@@ -545,14 +565,22 @@ internal fun SCallApp(
             },
             bottomBar = {
                 if (activeContact == null && photoEditor == null && page != "Settings" && page != "SIM Manager") {
-                    NavigationBar(containerColor = scheme.surface, tonalElevation = 1.dp) {
+                    NavigationBar(containerColor = scheme.surface, tonalElevation = 2.dp) {
                         tabs.forEach { tab ->
                             NavigationBarItem(
                                 selected = page == tab.label,
                                 onClick = { navigateTo(tab.label); query = "" },
                                 icon = { Icon(tab.icon, contentDescription = tab.label) },
-                                label = { Text(tab.label, fontSize = 11.sp) },
-                                alwaysShowLabel = true
+                                label = { Text(tab.label, fontSize = 11.sp,
+                                    fontWeight = if (page == tab.label) FontWeight.SemiBold else FontWeight.Normal) },
+                                alwaysShowLabel = true,
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = scheme.primary,
+                                    selectedTextColor = scheme.primary,
+                                    indicatorColor = scheme.primaryContainer,
+                                    unselectedIconColor = scheme.onSurfaceVariant,
+                                    unselectedTextColor = scheme.onSurfaceVariant
+                                )
                             )
                         }
                     }
@@ -700,6 +728,9 @@ internal fun SCallApp(
                                 }
                             }
                         }
+                        if (page == "Recents" && query.isBlank()) {
+                            QuickDialCard(onOpenKeypad = { navigateTo("Keypad") })
+                        }
                         SearchField(value = query, onChange = { query = it })
                         when (page) {
                             "Contacts" -> ContactsScreen(
@@ -761,6 +792,42 @@ internal fun SCallApp(
     }
 }
 
+/**
+ * Small, real shortcut on Recents: a professional landing card without adding
+ * fake calling, recording, spam-detection or VOIP capabilities.
+ */
+@Composable
+private fun QuickDialCard(onOpenKeypad: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 5.dp),
+        shape = RoundedCornerShape(22.dp),
+        color = scheme.primaryContainer,
+        tonalElevation = 1.dp
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenKeypad)
+                .padding(horizontal = 17.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Ready to connect?", color = scheme.onPrimaryContainer,
+                    fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(2.dp))
+                Text("Open keypad for a new call", color = scheme.onPrimaryContainer.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.bodySmall)
+            }
+            Box(
+                Modifier.size(44.dp).background(scheme.primary, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Call, contentDescription = "Open keypad",
+                    tint = scheme.onPrimary, modifier = Modifier.size(22.dp))
+            }
+        }
+    }
+}
+
 @Composable
 private fun SetupBanner(defaultDialer: Boolean, onRole: () -> Unit, onPermission: () -> Unit) {
     Surface(
@@ -798,12 +865,12 @@ private fun SearchField(value: String, onChange: (String) -> Unit) {
                 Icon(Icons.Default.Close, "Clear search")
             }
         },
-        placeholder = { Text("Search contacts or numbers", style = MaterialTheme.typography.bodyMedium) },
+        placeholder = { Text("Search calls, contacts or numbers", style = MaterialTheme.typography.bodyMedium) },
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-            unfocusedBorderColor = Color.Transparent,
+            focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f),
+            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
             focusedContainerColor = MaterialTheme.colorScheme.surface,
             unfocusedContainerColor = MaterialTheme.colorScheme.surface
         )

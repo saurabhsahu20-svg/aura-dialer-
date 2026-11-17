@@ -16,10 +16,12 @@ import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
 import com.scall.phone.data.PhoneRepository
 import com.scall.phone.ui.SCallApp
+import com.scall.phone.ui.nextExternalDialRequestId
 
 class MainActivity : ComponentActivity() {
     private lateinit var repository: PhoneRepository
     private var dialNumber by mutableStateOf("")
+    private var dialIntentVersion by mutableIntStateOf(0)
     private var refreshVersion by mutableIntStateOf(0)
     private var lastResumeAt = 0L
 
@@ -40,6 +42,7 @@ class MainActivity : ComponentActivity() {
             SCallApp(
                 repository = repository,
                 externalDialNumber = dialNumber,
+                externalDialRequestId = dialIntentVersion,
                 refreshVersion = refreshVersion,
                 requestDialerRole = ::requestDialerRole,
                 requestPermissions = ::requestPermissions
@@ -66,7 +69,10 @@ class MainActivity : ComponentActivity() {
 
     private fun readDialIntent(intent: Intent?) {
         if (intent?.action == Intent.ACTION_DIAL) {
+            // A repeated ACTION_DIAL with the same number must still open the keypad.
+            // A state change to the text alone does not trigger Compose if it is equal.
             dialNumber = intent.data?.schemeSpecificPart.orEmpty()
+            dialIntentVersion = nextExternalDialRequestId(dialIntentVersion)
         }
     }
 

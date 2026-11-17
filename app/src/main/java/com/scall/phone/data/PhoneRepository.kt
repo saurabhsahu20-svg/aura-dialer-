@@ -263,20 +263,35 @@ internal data class CallerPhotoStyle(
     val dim: Float = 0.34f
 )
 
+/** Reject invalid floats before passing them to Compose graphics layers. */
+internal fun boundedPhotoValue(value: Float, fallback: Float, minimum: Float, maximum: Float): Float =
+    (if (value.isFinite()) value else fallback).coerceIn(minimum, maximum)
+
 internal class PhotoStore(private val context: Context) {
     private val storage = context.getSharedPreferences("caller_photos", Context.MODE_PRIVATE)
     private fun id(number: String) = normalizeNumber(number).takeLast(15)
     private fun key(number: String) = "photo:${id(number)}"
 
-    fun photoFor(number: String): String? = storage.getString(key(number), null)
+    fun photoFor(number: String): String? = try {
+        storage.getString(key(number), null)
+    } catch (_: ClassCastException) {
+        // Some old installs can contain preferences written with the wrong type.
+        null
+    }
+
+    private fun safeFloat(key: String, fallback: Float): Float = try {
+        storage.getFloat(key, fallback)
+    } catch (_: ClassCastException) {
+        fallback
+    }
 
     fun styleFor(number: String): CallerPhotoStyle {
         val id = id(number)
         return CallerPhotoStyle(
-            zoom = storage.getFloat("zoom:$id", 1f).coerceIn(1f, 2.4f),
-            horizontal = storage.getFloat("pan_x:$id", 0f).coerceIn(-0.45f, 0.45f),
-            vertical = storage.getFloat("pan_y:$id", 0f).coerceIn(-0.45f, 0.45f),
-            dim = storage.getFloat("dim:$id", 0.34f).coerceIn(0.14f, 0.64f)
+            zoom = boundedPhotoValue(safeFloat("zoom:$id", 1f), 1f, 1f, 2.4f),
+            horizontal = boundedPhotoValue(safeFloat("pan_x:$id", 0f), 0f, -0.45f, 0.45f),
+            vertical = boundedPhotoValue(safeFloat("pan_y:$id", 0f), 0f, -0.45f, 0.45f),
+            dim = boundedPhotoValue(safeFloat("dim:$id", 0.34f), 0.34f, 0.14f, 0.64f)
         )
     }
 
@@ -307,10 +322,13 @@ internal class CallHistoryStore(context: Context) {
     private val preferences = context.getSharedPreferences("s_call_history_labels", Context.MODE_PRIVATE)
 
     private fun key(row: RecentEntry): String = "${row.id}:${row.timestamp}"
-    fun title(row: RecentEntry): String? =
+    fun title(row: RecentEntry): String? = try {
         preferences.getString("title:${key(row)}", null)?.takeIf { it.isNotBlank() }
-    fun note(row: RecentEntry): String =
+    } catch (_: ClassCastException) { null }
+
+    fun note(row: RecentEntry): String = try {
         preferences.getString("note:${key(row)}", "").orEmpty()
+    } catch (_: ClassCastException) { "" }
 
     fun save(row: RecentEntry, title: String, note: String) {
         preferences.edit().apply {

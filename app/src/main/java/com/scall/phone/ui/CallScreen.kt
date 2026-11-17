@@ -49,7 +49,7 @@ import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 import kotlin.math.abs
 
-private val BackBlue = Color(0xFF061A41)
+private val BackBlue = Color(0xFF082A1C)
 private val Accept = Color(0xFF2CD987)
 private val Decline = Color(0xFFFF6376)
 
@@ -82,7 +82,7 @@ internal fun CallerPhotoPreview(name: String, photo: String?, style: CallerPhoto
 private fun CallPhotoBackground(photo: String?, style: CallerPhotoStyle = CallerPhotoStyle()) {
     Box(
         Modifier.fillMaxSize().background(
-            Brush.linearGradient(listOf(Color(0xFF071632), Color(0xFF0E3C86), Color(0xFF051329)))
+            Brush.linearGradient(listOf(Color(0xFF051A11), Color(0xFF0D5738), Color(0xFF071B13)))
         )
     ) {
         if (!photo.isNullOrBlank()) {
@@ -101,20 +101,20 @@ private fun CallPhotoBackground(photo: String?, style: CallerPhotoStyle = Caller
                 val center = Offset(size.width * 0.73f, size.height * 0.42f)
                 repeat(4) { index ->
                     drawCircle(
-                        color = Color(0xFF65BFFF).copy(alpha = 0.10f - index * 0.016f),
+                        color = Color(0xFF56E3A4).copy(alpha = 0.10f - index * 0.016f),
                         radius = size.minDimension * (0.23f + index * 0.14f),
                         center = center, style = Stroke(width = 4.dp.toPx())
                     )
                 }
-                drawCircle(Color(0xFF39A4FB).copy(alpha = 0.14f),
+                drawCircle(Color(0xFF26CB88).copy(alpha = 0.14f),
                     radius = size.minDimension * 0.24f,
                     center = center)
             }
         }
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
             listOf(Color.Black.copy(alpha = (style.dim * 0.7f).coerceAtMost(0.5f)), Color.Transparent,
-                Color(0xFF030A17).copy(alpha = (style.dim + 0.30f).coerceAtMost(0.85f)),
-                Color(0xFF020611).copy(alpha = (style.dim + 0.50f).coerceAtMost(0.94f)))
+                Color(0xFF03140D).copy(alpha = (style.dim + 0.30f).coerceAtMost(0.85f)),
+                Color(0xFF021009).copy(alpha = (style.dim + 0.50f).coerceAtMost(0.94f)))
         )))
     }
 }
@@ -171,7 +171,7 @@ internal fun CallScreen(
         ) {
             Spacer(Modifier.height(34.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(8.dp).background(if (incoming) Accept else Color(0xFF76ACFF), CircleShape))
+                Box(Modifier.size(8.dp).background(if (incoming) Accept else Color(0xFF7FE0AC), CircleShape))
                 Spacer(Modifier.width(8.dp))
                 Text(
                     when (call?.state) {
@@ -202,14 +202,14 @@ internal fun CallScreen(
             if (call != null && !incoming) {
                 Spacer(Modifier.height(8.dp))
                 Surface(
-                    color = Color(0xFF071C38).copy(alpha = 0.72f),
+                    color = Color(0xFF052B1C).copy(alpha = 0.72f),
                     shape = RoundedCornerShape(18.dp)
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.HeadsetMic, "Current audio output", tint = Color(0xFF88D8FF),
+                        Icon(Icons.Default.HeadsetMic, "Current audio output", tint = Color(0xFF9BEECB),
                             modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(7.dp))
                         Text("Audio: ${call.audioRouteLabel}",
@@ -347,7 +347,7 @@ private fun IncomingSlideControl(onAnswer: () -> Unit, onDecline: () -> Unit) {
         val shape = RoundedCornerShape(48.dp)
 
         Box(Modifier.fillMaxSize().clip(shape)
-            .background(Color(0xFF071529).copy(alpha = 0.53f)),
+            .background(Color(0xFF061B12).copy(alpha = 0.53f)),
             contentAlignment = Alignment.Center) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 15.dp),
@@ -517,7 +517,7 @@ private fun ControlButton(
             enabled = enabled,
             modifier = Modifier.size(63.dp),
             colors = IconButtonDefaults.filledTonalIconButtonColors(
-                containerColor = if (active) Color(0xFF4285F5) else Color.White.copy(alpha = 0.17f),
+                containerColor = if (active) Color(0xFF087347) else Color.White.copy(alpha = 0.17f),
                 contentColor = Color.White,
                 disabledContainerColor = Color.White.copy(alpha = 0.07f),
                 disabledContentColor = Color.White.copy(alpha = 0.35f)

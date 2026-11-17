@@ -25,6 +25,13 @@ class SCallUiSmokeTest {
     }
 
     @Test
+    fun freshQuickDialCardOpensRealKeypad() {
+        rule.onNodeWithText("Ready to connect?").assertExists()
+        rule.onNodeWithText("Ready to connect?").performClick()
+        rule.onNodeWithText("Enter a number").assertExists()
+    }
+
+    @Test
     fun keypadBackArrowReturnsToRecentsWithoutExitingApp() {
         rule.onNodeWithContentDescription("Keypad", useUnmergedTree = true).performClick()
         rule.onNodeWithText("Enter a number").assertExists()

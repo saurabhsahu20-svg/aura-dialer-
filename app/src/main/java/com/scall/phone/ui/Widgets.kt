@@ -61,7 +61,7 @@ import kotlin.math.abs
 internal fun ContactAvatar(name: String, photo: String?, size: Dp = 52.dp) {
     Box(
         Modifier.size(size).clip(CircleShape).background(
-            Brush.linearGradient(listOf(Color(0xFF1352B9), Color(0xFF41B7F7)))
+            Brush.linearGradient(listOf(Color(0xFF065434), Color(0xFF2DCB8B)))
         ), contentAlignment = Alignment.Center
     ) {
         if (!photo.isNullOrBlank()) {
