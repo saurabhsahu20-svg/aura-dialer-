@@ -12,41 +12,65 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-val Navy = Color(0xFF061C43)
-val Blue = Color(0xFF186EFF)
-val Cyan = Color(0xFF20BDFF)
-val Mint = Color(0xFF32C58B)
-val Ink = Color(0xFF122039)
+// Brand palette aligns with the user's selected bottle-green calling icon.
+// Contrast stays high in Light, Dark and AMOLED modes.
+val Navy = Color(0xFF062F20)
+val Blue = Color(0xFF176FBC)  // Preserve blue for messaging actions.
+val Cyan = Color(0xFF23BD9D)
+val Mint = Color(0xFF24B67A)
+val Ink = Color(0xFF142A21)
+val BottleGreen = Color(0xFF087347)
 
 private val Light = lightColorScheme(
-    primary = Blue,
+    primary = BottleGreen,
     onPrimary = Color.White,
-    background = Color(0xFFF8FAFE),
+    primaryContainer = Color(0xFFD9F4E5),
+    onPrimaryContainer = Color(0xFF06462D),
+    secondary = Color(0xFF316B52),
+    onSecondary = Color.White,
+    background = Color(0xFFF5F8F6),
     onBackground = Ink,
     surface = Color.White,
     onSurface = Ink,
-    surfaceVariant = Color(0xFFEDF2FA),
-    outlineVariant = Color(0xFFE5EAF3)
+    surfaceVariant = Color(0xFFE8F1EB),
+    onSurfaceVariant = Color(0xFF50665A),
+    surfaceContainerLow = Color(0xFFF0F6F2),
+    surfaceContainerHigh = Color(0xFFE8F0EA),
+    outline = Color(0xFF81988B),
+    outlineVariant = Color(0xFFD9E7DD)
 )
 
 private val Dark = darkColorScheme(
-    primary = Color(0xFF6DA5FF),
-    onPrimary = Navy,
-    background = Color(0xFF101725),
-    onBackground = Color(0xFFF1F5FC),
-    surface = Color(0xFF1B2434),
-    onSurface = Color(0xFFF1F5FC),
-    surfaceVariant = Color(0xFF273248)
+    primary = Color(0xFF4DD49A),
+    onPrimary = Color(0xFF003D24),
+    primaryContainer = Color(0xFF17583C),
+    onPrimaryContainer = Color(0xFFCBF5DC),
+    secondary = Color(0xFF8BDCB4),
+    background = Color(0xFF0B1712),
+    onBackground = Color(0xFFE9F6EE),
+    surface = Color(0xFF14251C),
+    onSurface = Color(0xFFE9F6EE),
+    surfaceVariant = Color(0xFF22372B),
+    onSurfaceVariant = Color(0xFFBACBBF),
+    surfaceContainerLow = Color(0xFF112018),
+    surfaceContainerHigh = Color(0xFF253A2D),
+    outlineVariant = Color(0xFF385443)
 )
 
 private val Amoled = darkColorScheme(
-    primary = Color(0xFF6DA5FF),
+    primary = Color(0xFF4DD49A),
     onPrimary = Color.Black,
+    primaryContainer = Color(0xFF174F36),
+    onPrimaryContainer = Color(0xFFD8F5E2),
     background = Color.Black,
     onBackground = Color.White,
-    surface = Color(0xFF0F1116),
+    surface = Color(0xFF0B130E),
     onSurface = Color.White,
-    surfaceVariant = Color(0xFF191D24)
+    surfaceVariant = Color(0xFF15251B),
+    onSurfaceVariant = Color(0xFFB5CCBD),
+    surfaceContainerLow = Color(0xFF08120C),
+    surfaceContainerHigh = Color(0xFF203126),
+    outlineVariant = Color(0xFF314739)
 )
 
 /** Carefully tuned Android system sans typography: lightweight, offline, and Hindi-compatible. */
