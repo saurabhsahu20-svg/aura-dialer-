@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import com.scall.phone.R
 import com.scall.phone.data.CallerPhotoStyle
 import com.scall.phone.data.ContactEntry
+import com.scall.phone.data.ContactManager
 import com.scall.phone.data.CallStartAccess
 import com.scall.phone.data.callStartAccess
 import com.scall.phone.data.PhoneRepository
@@ -75,13 +76,15 @@ internal fun SCallApp(
     externalDialRequestId: Int,
     refreshVersion: Int,
     requestDialerRole: () -> Unit,
-    requestPermissions: () -> Unit
+    requestPermissions: () -> Unit,
+    requestContactPermissions: () -> Unit
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("s_call_settings", android.content.Context.MODE_PRIVATE) }
     val photos = remember { PhotoStore(context.applicationContext) }
     val simPrefs = remember { SimPreferences(context.applicationContext) }
     val historyStore = remember { CallHistoryStore(context.applicationContext) }
+    val contactsManager = remember { ContactManager(context.applicationContext) }
     val actionScope = rememberCoroutineScope()
     var theme by remember { mutableStateOf(prefs.getString("theme", "System") ?: "System") }
     var enableSwipes by remember { mutableStateOf(prefs.getBoolean("swipe_call", true)) }
@@ -90,6 +93,9 @@ internal fun SCallApp(
     var query by rememberSaveable { mutableStateOf("") }
     var dialNumber by rememberSaveable { mutableStateOf("") }
     var activeContact by remember { mutableStateOf<ContactEntry?>(null) }
+    var managedContactId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var managedContactEditing by rememberSaveable { mutableStateOf(false) }
+    var contactBackSignal by remember { mutableIntStateOf(0) }
     var photoEditor by remember { mutableStateOf<ContactEntry?>(null) }
     var newPhoto by remember { mutableStateOf<Uri?>(null) }
     var localRefresh by remember { mutableIntStateOf(0) }
@@ -154,6 +160,7 @@ internal fun SCallApp(
 
     fun navigateBack() {
         when {
+            managedContactId != null -> contactBackSignal++
             photoEditor != null -> {
                 photoEditor = null
                 newPhoto = null
@@ -176,7 +183,7 @@ internal fun SCallApp(
     // Android system Back and gesture navigation mirror the in-app Back arrow.
     // Only the root Recents page can exit S call; the keypad never closes the app.
     BackHandler(
-        enabled = photoEditor != null || activeContact != null ||
+        enabled = managedContactId != null || photoEditor != null || activeContact != null ||
             historySelectionMode || query.isNotBlank() ||
             page != "Recents" || pageHistory.isNotEmpty()
     ) {
@@ -513,7 +520,9 @@ internal fun SCallApp(
         Scaffold(
             containerColor = scheme.background,
             topBar = {
-                if (photoEditor != null || activeContact != null || page == "SIM Manager" || page == "Settings" ) {
+                if (managedContactId != null) {
+                    // ContactWorkspace owns its simple full-screen profile/editor toolbar.
+                } else if (photoEditor != null || activeContact != null || page == "SIM Manager" || page == "Settings" ) {
                     TopAppBar(
                         title = { Text(when {
                             photoEditor != null -> "Caller photo"
@@ -564,7 +573,8 @@ internal fun SCallApp(
                 }
             },
             bottomBar = {
-                if (activeContact == null && photoEditor == null && page != "Settings" && page != "SIM Manager") {
+                if (managedContactId == null && activeContact == null && photoEditor == null &&
+                    page != "Settings" && page != "SIM Manager") {
                     NavigationBar(containerColor = scheme.surface, tonalElevation = 2.dp) {
                         tabs.forEach { tab ->
                             NavigationBarItem(
@@ -585,12 +595,56 @@ internal fun SCallApp(
                         }
                     }
                 }
+            },
+            floatingActionButton = {
+                if (managedContactId == null && activeContact == null && photoEditor == null &&
+                    (page == "Contacts" || page == "Favorites")) {
+                    FloatingActionButton(
+                        onClick = {
+                            managedContactId = 0L
+                            managedContactEditing = true
+                            contactBackSignal = 0
+                        },
+                        containerColor = scheme.primary,
+                        contentColor = scheme.onPrimary
+                    ) { Icon(Icons.Default.PersonAdd, contentDescription = "Add contact") }
+                }
             }
         ) { padding ->
             Column(
                 modifier = Modifier.fillMaxSize().padding(padding),
             ) {
                 when {
+                    managedContactId != null -> ContactWorkspace(
+                        manager = contactsManager,
+                        contactId = managedContactId!!,
+                        editing = managedContactEditing,
+                        onEdit = { managedContactEditing = true },
+                        onSaved = { newId ->
+                            managedContactId = newId
+                            managedContactEditing = false
+                            localRefresh++
+                        },
+                        onClose = {
+                            if (managedContactEditing && managedContactId != 0L) {
+                                managedContactEditing = false
+                            } else {
+                                managedContactId = null
+                                managedContactEditing = false
+                                localRefresh++
+                            }
+                        },
+                        onDeleted = {
+                            managedContactId = null
+                            managedContactEditing = false
+                            localRefresh++
+                        },
+                        onCall = ::requestCall,
+                        onMessage = ::requestMessage,
+                        onPermissions = requestContactPermissions,
+                        history = recents,
+                        backSignal = contactBackSignal
+                    )
                     photoEditor != null -> ProfessionalPhotoEditor(
                         contact = photoEditor!!,
                         currentPhoto = photos.photoFor(photoEditor!!.number) ?: photoEditor!!.photo,
@@ -739,7 +793,11 @@ internal fun SCallApp(
                                 swipesEnabled = enableSwipes,
                                 onCall = ::requestCall,
                                 onMessage = ::requestMessage,
-                                onContact = { activeContact = it },
+                                onContact = {
+                                    managedContactId = it.id
+                                    managedContactEditing = false
+                                    contactBackSignal = 0
+                                },
                                 onPhoto = ::openPhotoEditor
                             )
                             "Favorites" -> ContactsScreen(
@@ -748,7 +806,11 @@ internal fun SCallApp(
                                 swipesEnabled = enableSwipes,
                                 onCall = ::requestCall,
                                 onMessage = ::requestMessage,
-                                onContact = { activeContact = it },
+                                onContact = {
+                                    managedContactId = it.id
+                                    managedContactEditing = false
+                                    contactBackSignal = 0
+                                },
                                 onPhoto = ::openPhotoEditor,
                                 emptyTitle = "No favorites yet"
                             )
@@ -905,8 +967,8 @@ private fun ContactsScreen(
             "Allow contacts access or add contacts to your phone.")
         return
     }
-    LazyColumn(contentPadding = PaddingValues(bottom = 22.dp)) {
-        item { SectionHeading("Contacts", "${contacts.size} numbers") }
+    LazyColumn(contentPadding = PaddingValues(bottom = 100.dp)) {
+        item { SectionHeading("Contacts", "${contacts.size} contacts") }
         items(contacts, key = { "${it.id}:${it.number}" }) { contact ->
             SwipeContactRow(
                 name = contact.name, number = contact.number,
