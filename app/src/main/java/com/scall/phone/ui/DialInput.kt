@@ -4,6 +4,13 @@ package com.scall.phone.ui
 internal fun cleanDialNumber(text: String): String =
     text.filter { it.isDigit() || it in "+*#(),; -" }.trim().take(40)
 
+/**
+ * Track distinct Android ACTION_DIAL deliveries, including two requests for the
+ * exact same phone number. Wrap safely if the Activity survives a very long time.
+ */
+internal fun nextExternalDialRequestId(previous: Int): Int =
+    if (previous >= Int.MAX_VALUE || previous < 0) 1 else previous + 1
+
 /** On-screen digits, including a long press on zero for plus. */
 internal fun appendDialKey(current: String, key: String): String =
     cleanDialNumber(current + key)
