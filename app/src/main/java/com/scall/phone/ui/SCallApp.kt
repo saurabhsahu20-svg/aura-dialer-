@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.sp
 import com.scall.phone.R
 import com.scall.phone.data.CallerPhotoStyle
 import com.scall.phone.data.ContactEntry
+import com.scall.phone.data.ContactManager
+import com.scall.phone.data.ContactGroup
 import com.scall.phone.data.CallStartAccess
 import com.scall.phone.data.callStartAccess
 import com.scall.phone.data.PhoneRepository
@@ -75,13 +77,15 @@ internal fun SCallApp(
     externalDialRequestId: Int,
     refreshVersion: Int,
     requestDialerRole: () -> Unit,
-    requestPermissions: () -> Unit
+    requestPermissions: () -> Unit,
+    requestContactPermissions: () -> Unit
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("s_call_settings", android.content.Context.MODE_PRIVATE) }
     val photos = remember { PhotoStore(context.applicationContext) }
     val simPrefs = remember { SimPreferences(context.applicationContext) }
     val historyStore = remember { CallHistoryStore(context.applicationContext) }
+    val contactsManager = remember { ContactManager(context.applicationContext) }
     val actionScope = rememberCoroutineScope()
     var theme by remember { mutableStateOf(prefs.getString("theme", "System") ?: "System") }
     var enableSwipes by remember { mutableStateOf(prefs.getBoolean("swipe_call", true)) }
@@ -90,6 +94,9 @@ internal fun SCallApp(
     var query by rememberSaveable { mutableStateOf("") }
     var dialNumber by rememberSaveable { mutableStateOf("") }
     var activeContact by remember { mutableStateOf<ContactEntry?>(null) }
+    var managedContactId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var managedContactEditing by rememberSaveable { mutableStateOf(false) }
+    var contactBackSignal by remember { mutableIntStateOf(0) }
     var photoEditor by remember { mutableStateOf<ContactEntry?>(null) }
     var newPhoto by remember { mutableStateOf<Uri?>(null) }
     var localRefresh by remember { mutableIntStateOf(0) }
@@ -115,11 +122,17 @@ internal fun SCallApp(
     // walks the entire call log and reads private history notes again.
     val matchedContacts = remember(contacts, query) {
         if (query.isBlank()) contacts
-        else contacts.filter { it.name.contains(query, true) || it.number.contains(query) }
+        else contacts.filter {
+            it.name.contains(query, true) || it.nickname.contains(query, true) ||
+                it.company.contains(query, true) ||
+                it.allNumbers.any { number -> number.contains(query) }
+        }
     }
     val matchedFavorites = remember(contacts, query) {
         contacts.filter { it.favorite &&
-            (query.isBlank() || it.name.contains(query, true) || it.number.contains(query)) }
+            (query.isBlank() || it.name.contains(query, true) ||
+                it.nickname.contains(query, true) || it.company.contains(query, true) ||
+                it.allNumbers.any { number -> number.contains(query) }) }
     }
     // Expensive call-note searches run off the UI thread. Fast consecutive
     // keystrokes cancel older searches, keeping scrolling and dialpad responsive.
@@ -154,6 +167,7 @@ internal fun SCallApp(
 
     fun navigateBack() {
         when {
+            managedContactId != null -> contactBackSignal++
             photoEditor != null -> {
                 photoEditor = null
                 newPhoto = null
@@ -176,7 +190,7 @@ internal fun SCallApp(
     // Android system Back and gesture navigation mirror the in-app Back arrow.
     // Only the root Recents page can exit S call; the keypad never closes the app.
     BackHandler(
-        enabled = photoEditor != null || activeContact != null ||
+        enabled = managedContactId != null || photoEditor != null || activeContact != null ||
             historySelectionMode || query.isNotBlank() ||
             page != "Recents" || pageHistory.isNotEmpty()
     ) {
@@ -320,6 +334,40 @@ internal fun SCallApp(
             selected != null -> openMessage(number, selected.subscriptionId)
             subs.size > 1 -> { pendingSmsSims = subs; pendingSmsNumber = number }
             else -> openMessage(number, subs.firstOrNull()?.subscriptionId)
+        }
+    }
+
+    // VCF Import hands the selected document to a compatible Android Contacts importer.
+    // No contact data is uploaded to S Caller or a third party by this app.
+    val importVcf = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                context.startActivity(Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "text/x-vcard")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                })
+            } catch (_: Exception) {
+                Toast.makeText(context, "No compatible VCF importer available on this device",
+                    Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    val exportVcf = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/x-vcard")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            actionScope.launch {
+                try {
+                    val count = contactsManager.exportBasicVcard(contacts.map { it.id }, uri)
+                    Toast.makeText(context,
+                        "Exported $count basic VCF contacts. Photos and groups are not included.",
+                        Toast.LENGTH_LONG).show()
+                } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+                catch (_: Exception) {
+                    Toast.makeText(context, "VCF export failed. Check the selected destination.",
+                        Toast.LENGTH_LONG).show()
+                }
+            }
         }
     }
 
@@ -513,7 +561,9 @@ internal fun SCallApp(
         Scaffold(
             containerColor = scheme.background,
             topBar = {
-                if (photoEditor != null || activeContact != null || page == "SIM Manager" || page == "Settings" ) {
+                if (managedContactId != null) {
+                    // ContactWorkspace owns its simple full-screen profile/editor toolbar.
+                } else if (photoEditor != null || activeContact != null || page == "SIM Manager" || page == "Settings" ) {
                     TopAppBar(
                         title = { Text(when {
                             photoEditor != null -> "Caller photo"
@@ -564,7 +614,8 @@ internal fun SCallApp(
                 }
             },
             bottomBar = {
-                if (activeContact == null && photoEditor == null && page != "Settings" && page != "SIM Manager") {
+                if (managedContactId == null && activeContact == null && photoEditor == null &&
+                    page != "Settings" && page != "SIM Manager") {
                     NavigationBar(containerColor = scheme.surface, tonalElevation = 2.dp) {
                         tabs.forEach { tab ->
                             NavigationBarItem(
@@ -585,12 +636,56 @@ internal fun SCallApp(
                         }
                     }
                 }
+            },
+            floatingActionButton = {
+                if (managedContactId == null && activeContact == null && photoEditor == null &&
+                    (page == "Contacts" || page == "Favorites")) {
+                    FloatingActionButton(
+                        onClick = {
+                            managedContactId = 0L
+                            managedContactEditing = true
+                            contactBackSignal = 0
+                        },
+                        containerColor = scheme.primary,
+                        contentColor = scheme.onPrimary
+                    ) { Icon(Icons.Default.PersonAdd, contentDescription = "Add contact") }
+                }
             }
         ) { padding ->
             Column(
                 modifier = Modifier.fillMaxSize().padding(padding),
             ) {
                 when {
+                    managedContactId != null -> ContactWorkspace(
+                        manager = contactsManager,
+                        contactId = managedContactId!!,
+                        editing = managedContactEditing,
+                        onEdit = { managedContactEditing = true },
+                        onSaved = { newId ->
+                            managedContactId = newId
+                            managedContactEditing = false
+                            localRefresh++
+                        },
+                        onClose = {
+                            if (managedContactEditing && managedContactId != 0L) {
+                                managedContactEditing = false
+                            } else {
+                                managedContactId = null
+                                managedContactEditing = false
+                                localRefresh++
+                            }
+                        },
+                        onDeleted = {
+                            managedContactId = null
+                            managedContactEditing = false
+                            localRefresh++
+                        },
+                        onCall = ::requestCall,
+                        onMessage = ::requestMessage,
+                        onPermissions = requestContactPermissions,
+                        history = recents,
+                        backSignal = contactBackSignal
+                    )
                     photoEditor != null -> ProfessionalPhotoEditor(
                         contact = photoEditor!!,
                         currentPhoto = photos.photoFor(photoEditor!!.number) ?: photoEditor!!.photo,
@@ -734,22 +829,42 @@ internal fun SCallApp(
                         SearchField(value = query, onChange = { query = it })
                         when (page) {
                             "Contacts" -> ContactsScreen(
+                                manager = contactsManager,
                                 contacts = matchedContacts,
                                 photos = photos, loading = isLoading,
                                 swipesEnabled = enableSwipes,
                                 onCall = ::requestCall,
                                 onMessage = ::requestMessage,
-                                onContact = { activeContact = it },
-                                onPhoto = ::openPhotoEditor
+                                onContact = {
+                                    managedContactId = it.id
+                                    managedContactEditing = false
+                                    contactBackSignal = 0
+                                },
+                                onPhoto = ::openPhotoEditor,
+                                onImport = { importVcf.launch(arrayOf("text/x-vcard", "text/vcard", "text/plain")) },
+                                onExport = {
+                                    if (repository.hasContactsPermission()) exportVcf.launch("S_Caller_Contacts.vcf")
+                                    else requestContactPermissions()
+                                }
                             )
                             "Favorites" -> ContactsScreen(
+                                manager = contactsManager,
                                 contacts = matchedFavorites,
                                 photos = photos, loading = isLoading,
                                 swipesEnabled = enableSwipes,
                                 onCall = ::requestCall,
                                 onMessage = ::requestMessage,
-                                onContact = { activeContact = it },
+                                onContact = {
+                                    managedContactId = it.id
+                                    managedContactEditing = false
+                                    contactBackSignal = 0
+                                },
                                 onPhoto = ::openPhotoEditor,
+                                onImport = { importVcf.launch(arrayOf("text/x-vcard", "text/vcard", "text/plain")) },
+                                onExport = {
+                                    if (repository.hasContactsPermission()) exportVcf.launch("S_Caller_Contacts.vcf")
+                                    else requestContactPermissions()
+                                },
                                 emptyTitle = "No favorites yet"
                             )
                             else -> RecentsScreen(
@@ -894,20 +1009,95 @@ internal fun EmptyState(title: String, subtitle: String) {
 
 @Composable
 private fun ContactsScreen(
+    manager: ContactManager,
     contacts: List<ContactEntry>, photos: PhotoStore, loading: Boolean,
     swipesEnabled: Boolean, onCall: (String) -> Unit, onMessage: (String) -> Unit,
     onContact: (ContactEntry) -> Unit,
     onPhoto: (ContactEntry) -> Unit,
+    onImport: () -> Unit, onExport: () -> Unit,
     emptyTitle: String = "No contacts found"
 ) {
-    if (contacts.isEmpty()) {
-        EmptyState(if (loading) "Loading contacts…" else emptyTitle,
-            "Allow contacts access or add contacts to your phone.")
-        return
+    var section by remember { mutableStateOf("Contacts") }
+    var pickedGroup by remember { mutableStateOf<ContactGroup?>(null) }
+    var groupMenu by remember { mutableStateOf(false) }
+    var groupMembers by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var groups by remember { mutableStateOf<List<ContactGroup>>(emptyList()) }
+    LaunchedEffect(manager) {
+        groups = try { manager.groups() } catch (_: Exception) { emptyList() }
     }
-    LazyColumn(contentPadding = PaddingValues(bottom = 22.dp)) {
-        item { SectionHeading("Contacts", "${contacts.size} numbers") }
-        items(contacts, key = { "${it.id}:${it.number}" }) { contact ->
+    LaunchedEffect(pickedGroup) {
+        groupMembers = if (pickedGroup == null) emptySet()
+        else try { manager.members(pickedGroup!!.id) } catch (_: Exception) { emptySet() }
+    }
+    val visible = remember(contacts, section, pickedGroup, groupMembers) {
+        when (section) {
+            "Favourites" -> contacts.filter { it.favorite }
+            "Groups" -> contacts.filter { it.id in groupMembers }
+            else -> contacts
+        }
+    }
+    LazyColumn(contentPadding = PaddingValues(bottom = 100.dp)) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 18.dp, vertical = 7.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                listOf("Contacts", "Favourites", "Groups").forEach { tab ->
+                    FilterChip(selected = section == tab,
+                        onClick = { section = tab }, label = { Text(tab) })
+                }
+            }
+        }
+        if (section == "Groups") {
+            item {
+                Box(Modifier.padding(horizontal = 18.dp)) {
+                    OutlinedButton(onClick = { groupMenu = true }) {
+                        Icon(Icons.Default.GroupWork, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(pickedGroup?.title ?: "Choose contact group")
+                    }
+                    DropdownMenu(expanded = groupMenu, onDismissRequest = { groupMenu = false }) {
+                        groups.forEach { group ->
+                            DropdownMenuItem(text = { Text(group.title) }, onClick = {
+                                pickedGroup = group
+                                groupMenu = false
+                            })
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(onClick = onImport, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.FileOpen, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text("Import VCF")
+                }
+                OutlinedButton(onClick = onExport, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.FileDownload, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text("Export VCF")
+                }
+            }
+        }
+        item { SectionHeading(if (section == "Groups") pickedGroup?.title ?: "Groups" else section,
+            "${visible.size} contacts") }
+        if (visible.isEmpty()) {
+            item {
+                EmptyState(
+                    if (loading) "Loading contacts…" else if (section == "Groups" && groups.isEmpty())
+                        "No contact groups available" else emptyTitle,
+                    if (section == "Groups") "Groups are provided by Android and your selected contact accounts."
+                    else "Allow Contacts access or save a new contact with +."
+                )
+            }
+        }
+        items(visible, key = { "${it.id}:${it.number}" }) { contact ->
             SwipeContactRow(
                 name = contact.name, number = contact.number,
                 photoUri = photos.photoFor(contact.number) ?: contact.photo,

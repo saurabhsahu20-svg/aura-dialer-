@@ -32,6 +32,27 @@ class SCallUiSmokeTest {
     }
 
     @Test
+    fun contactsTabHasRealAddEditorAndContactActions() {
+        rule.onNodeWithContentDescription("Contacts", useUnmergedTree = true).performClick()
+        rule.onNodeWithContentDescription("Add contact").performClick()
+        rule.onNodeWithText("New contact").assertExists()
+        rule.onNodeWithText("First name").assertExists()
+        rule.onNodeWithText("Last name").assertExists()
+        rule.onNodeWithText("+ Add more details").assertExists()
+        rule.onNodeWithContentDescription("Cancel contact editor").performClick()
+        rule.onNodeWithText("Import VCF").assertExists()
+        rule.onNodeWithText("Export VCF").assertExists()
+    }
+
+    @Test
+    fun contactsTabsShowFavoritesAndGroups() {
+        rule.onNodeWithContentDescription("Contacts", useUnmergedTree = true).performClick()
+        rule.onNodeWithText("Favourites").performClick()
+        rule.onNodeWithText("Groups").performClick()
+        rule.onNodeWithText("Choose contact group").assertExists()
+    }
+
+    @Test
     fun keypadBackArrowReturnsToRecentsWithoutExitingApp() {
         rule.onNodeWithContentDescription("Keypad", useUnmergedTree = true).performClick()
         rule.onNodeWithText("Enter a number").assertExists()
