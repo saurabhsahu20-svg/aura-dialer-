@@ -25,6 +25,29 @@ class SCallUiSmokeTest {
     }
 
     @Test
+    fun freshQuickDialCardOpensRealKeypad() {
+        rule.onNodeWithText("Ready to connect?").assertExists()
+        rule.onNodeWithText("Ready to connect?").performClick()
+        rule.onNodeWithText("Enter a number").assertExists()
+    }
+
+    @Test
+    fun repeatedExternalDialRequestReopensTheSameNumber() {
+        val intent = android.content.Intent(
+            android.content.Intent.ACTION_DIAL,
+            android.net.Uri.parse("tel:5550102")
+        )
+        rule.activity.runOnUiThread { rule.activity.onNewIntent(intent) }
+        rule.waitForIdle()
+        rule.onNodeWithText("Clear").performClick()
+        rule.onNodeWithText("Paste").assertExists()
+        // Android may deliver the same ACTION_DIAL URI more than once.
+        rule.activity.runOnUiThread { rule.activity.onNewIntent(intent) }
+        rule.waitForIdle()
+        rule.onNodeWithText("Clear").assertExists()
+    }
+
+    @Test
     fun keypadBackArrowReturnsToRecentsWithoutExitingApp() {
         rule.onNodeWithContentDescription("Keypad", useUnmergedTree = true).performClick()
         rule.onNodeWithText("Enter a number").assertExists()
