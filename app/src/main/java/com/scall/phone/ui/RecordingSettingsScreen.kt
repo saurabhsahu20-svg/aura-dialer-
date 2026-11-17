@@ -74,9 +74,24 @@ internal fun RecordingSettingsScreen() {
     }
 
     LaunchedEffect(refresh) {
-        recordings = store.all()
-        contactsByNumber = repository.contacts()
-            .associate { normalizeNumber(it.number).takeLast(10) to it.name }
+        try {
+            recordings = store.all()
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            android.util.Log.e("SCallRecording", "Recording library unavailable", error)
+            Toast.makeText(context, "Could not load recordings", Toast.LENGTH_SHORT).show()
+        }
+        // Contact lookup is optional: a contact permission change must not hide
+        // the private recordings the user already has.
+        try {
+            contactsByNumber = repository.contacts()
+                .associate { normalizeNumber(it.number).takeLast(10) to it.name }
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            android.util.Log.w("SCallRecording", "Contact names unavailable", error)
+        }
     }
 
     val importPicker = rememberLauncherForActivityResult(
@@ -210,8 +225,16 @@ internal fun RecordingSettingsScreen() {
             confirmButton = {
                 TextButton(onClick = {
                     scope.launch {
-                        if (store.rename(selected.id, editTitle, editPhone)) refresh++
-                        selectedForEdit = null
+                        try {
+                            if (store.rename(selected.id, editTitle, editPhone)) refresh++
+                            else Toast.makeText(context, "Recording not found", Toast.LENGTH_SHORT).show()
+                            selectedForEdit = null
+                        } catch (error: kotlinx.coroutines.CancellationException) {
+                            throw error
+                        } catch (error: Exception) {
+                            android.util.Log.e("SCallRecording", "Rename failed", error)
+                            Toast.makeText(context, "Could not rename recording", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }) { Text("Save") }
             },
@@ -235,8 +258,16 @@ internal fun RecordingSettingsScreen() {
                 TextButton(onClick = {
                     if (playingId == selected.id) stopPlayback()
                     scope.launch {
-                        if (store.delete(selected.id)) refresh++
-                        selectedForDelete = null
+                        try {
+                            if (store.delete(selected.id)) refresh++
+                            else Toast.makeText(context, "Could not delete recording", Toast.LENGTH_SHORT).show()
+                            selectedForDelete = null
+                        } catch (error: kotlinx.coroutines.CancellationException) {
+                            throw error
+                        } catch (error: Exception) {
+                            android.util.Log.e("SCallRecording", "Delete failed", error)
+                            Toast.makeText(context, "Could not delete recording", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }) { Text("Delete") }
             },
@@ -259,9 +290,16 @@ internal fun RecordingSettingsScreen() {
                     cleanupConfirm = false
                     stopPlayback()
                     scope.launch {
-                        val count = store.cleanupExpired(retention)
-                        refresh++
-                        Toast.makeText(context, "Removed $count old imported files", Toast.LENGTH_SHORT).show()
+                        try {
+                            val count = store.cleanupExpired(retention)
+                            refresh++
+                            Toast.makeText(context, "Removed $count old files", Toast.LENGTH_SHORT).show()
+                        } catch (error: kotlinx.coroutines.CancellationException) {
+                            throw error
+                        } catch (error: Exception) {
+                            android.util.Log.e("SCallRecording", "Cleanup failed", error)
+                            Toast.makeText(context, "Could not clean up recordings", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }) { Text("Clean up") }
             },
@@ -271,10 +309,12 @@ internal fun RecordingSettingsScreen() {
         )
     }
 
-    val matches = recordings.filter {
-        search.isBlank() ||
-            it.title.contains(search, ignoreCase = true) ||
-            it.phoneNumber.contains(search)
+    val matches = remember(recordings, search) {
+        recordings.filter {
+            search.isBlank() ||
+                it.title.contains(search, ignoreCase = true) ||
+                it.phoneNumber.contains(search)
+        }
     }
 
     LazyColumn(
