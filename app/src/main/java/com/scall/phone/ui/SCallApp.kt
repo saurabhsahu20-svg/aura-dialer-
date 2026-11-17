@@ -122,14 +122,13 @@ internal fun SCallApp(
     }
     // Expensive call-note searches run off the UI thread. Fast consecutive
     // keystrokes cancel older searches, keeping scrolling and dialpad responsive.
-    val matchedRecents by produceState(
-        initialValue = recents, recents, query, localRefresh
-    ) {
+    var matchedRecents by remember { mutableStateOf<List<RecentEntry>>(emptyList()) }
+    LaunchedEffect(recents, query, localRefresh) {
         if (query.isBlank()) {
-            value = recents
+            matchedRecents = recents
         } else {
             kotlinx.coroutines.delay(120)
-            value = withContext(Dispatchers.Default) {
+            matchedRecents = withContext(Dispatchers.Default) {
                 recents.filter {
                     it.name.contains(query, true) || it.number.contains(query) ||
                         (historyStore.title(it)?.contains(query, true) == true) ||
