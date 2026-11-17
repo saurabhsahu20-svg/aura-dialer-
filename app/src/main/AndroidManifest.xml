@@ -10,8 +10,8 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <application
         android:allowBackup="false"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:icon="@drawable/scall_rainbow_call_logo"
+        android:roundIcon="@drawable/scall_rainbow_call_logo"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.SCall">
