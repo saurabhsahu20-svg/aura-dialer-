@@ -45,7 +45,8 @@ class MainActivity : ComponentActivity() {
                 externalDialRequestId = dialIntentVersion,
                 refreshVersion = refreshVersion,
                 requestDialerRole = ::requestDialerRole,
-                requestPermissions = ::requestPermissions
+                requestPermissions = ::requestPermissions,
+                requestContactPermissions = ::requestContactPermissions
             )
         }
     }
@@ -94,6 +95,19 @@ class MainActivity : ComponentActivity() {
             android.util.Log.e("SCall", "Default Phone app settings unavailable", error)
             android.widget.Toast.makeText(this,
                 "Choose S Caller under Settings > Apps > Default apps > Phone",
+                android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun requestContactPermissions() {
+        try {
+            permissionsLauncher.launch(arrayOf(
+                Manifest.permission.READ_CONTACTS,
+                Manifest.permission.WRITE_CONTACTS
+            ))
+        } catch (error: RuntimeException) {
+            android.util.Log.w("SCall", "Contact permission request unavailable", error)
+            android.widget.Toast.makeText(this, "Enable Contacts access in Android settings",
                 android.widget.Toast.LENGTH_LONG).show()
         }
     }
