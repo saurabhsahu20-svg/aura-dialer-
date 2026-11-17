@@ -76,7 +76,9 @@ class CallUiActivity : ComponentActivity() {
             var retryAttempt by remember { androidx.compose.runtime.mutableIntStateOf(0) }
             var noCallTimeout by remember { mutableStateOf(false) }
             var hadLiveCall by remember { mutableStateOf(false) }
-            LaunchedEffect(call, retryAttempt) {
+            // Audio route/status updates can arrive many times per second.
+            // Retry only on actual call presence changes, not each snapshot object.
+            LaunchedEffect(call != null, retryAttempt) {
                 if (call != null) {
                     hadLiveCall = true
                     noCallTimeout = false
