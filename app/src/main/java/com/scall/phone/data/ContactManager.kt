@@ -5,6 +5,9 @@ import android.content.ContentProviderOperation
 import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import java.io.ByteArrayOutputStream
 import android.net.Uri
 import android.provider.ContactsContract
 import androidx.core.content.ContextCompat
@@ -142,7 +145,8 @@ internal class ContactManager(private val context: Context) {
         found.toList()
     }
 
-    suspend fun save(person: ManagedContact, account: ContactAccount? = null): Long =
+    suspend fun save(person: ManagedContact, account: ContactAccount? = null,
+                     pickedPhoto: Uri? = null, removePhoto: Boolean = false): Long =
         withContext(Dispatchers.IO) {
             if (!canWrite()) throw SecurityException("Allow Contacts editing in Android settings")
             require(person.fullName.isNotBlank()) { "Enter a contact name" }
@@ -231,6 +235,12 @@ internal class ContactManager(private val context: Context) {
             }
             putDate(ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY, person.birthday)
             putDate(ContactsContract.CommonDataKinds.Event.TYPE_ANNIVERSARY, person.anniversary)
+            val photo = ContactsContract.CommonDataKinds.Photo
+            if (pickedPhoto != null) {
+                single(photo.CONTENT_ITEM_TYPE, mapOf(photo.PHOTO to photoJpeg(pickedPhoto)), true)
+            } else if (removePhoto) {
+                single(photo.CONTENT_ITEM_TYPE, emptyMap(), false)
+            }
             val saved = resolver.applyBatch(ContactsContract.AUTHORITY, ops)
             val contactId = if (creating) {
                 val newRawId = saved.firstOrNull()?.uri?.lastPathSegment?.toLongOrNull()
@@ -262,6 +272,28 @@ internal class ContactManager(private val context: Context) {
             if (c.moveToFirst()) c.getString(0) else null
         } ?: return null
         return Uri.withAppendedPath(PersonRow.CONTENT_VCARD_URI, Uri.encode(key))
+    }
+
+    /** Downsample large SAF images before inserting into the Android contact provider. */
+    private fun photoJpeg(uri: Uri): ByteArray {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            throw IllegalArgumentException("Unsupported contact photo")
+        }
+        var sample = 1
+        while (bounds.outWidth / sample > 512 || bounds.outHeight / sample > 512) sample *= 2
+        val options = BitmapFactory.Options().apply { inSampleSize = sample }
+        val bitmap = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+            ?: throw IllegalArgumentException("Could not read contact photo")
+        return try {
+            ByteArrayOutputStream().use { out ->
+                if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 82, out)) {
+                    throw IllegalStateException("Photo compression failed")
+                }
+                out.toByteArray()
+            }
+        } finally { bitmap.recycle() }
     }
 
     private fun phoneType(label: String) = when (label.lowercase()) {
