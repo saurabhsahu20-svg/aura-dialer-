@@ -138,6 +138,13 @@ internal fun SCallApp(
         }
     }
 
+    // Users upgrading from a prior release may have the removed page in saved
+    // navigation state. Return to Recents rather than showing an orphan screen.
+    LaunchedEffect(Unit) {
+        if (page == "Recording Manager") page = "Recents"
+        pageHistory = pageHistory.filterNot { it == "Recording Manager" }
+    }
+
     fun navigateTo(destination: String) {
         if (destination == page) return
         pageHistory = pushPageHistory(pageHistory, page, destination)
@@ -493,13 +500,12 @@ internal fun SCallApp(
         Scaffold(
             containerColor = scheme.background,
             topBar = {
-                if (photoEditor != null || activeContact != null || page == "SIM Manager" || page == "Settings" || page == "Recording Manager") {
+                if (photoEditor != null || activeContact != null || page == "SIM Manager" || page == "Settings" ) {
                     TopAppBar(
                         title = { Text(when {
                             photoEditor != null -> "Caller photo"
                             activeContact != null -> "Contact details"
                             page == "SIM Manager" -> "SIM & network"
-                            page == "Recording Manager" -> "Call Recording"
                             else -> "Settings"
                         }) },
                         navigationIcon = {
@@ -523,9 +529,6 @@ internal fun SCallApp(
                             }
                         },
                         actions = {
-                            IconButton(onClick = { navigateTo("Recording Manager") }) {
-                                Icon(Icons.Default.GraphicEq, contentDescription = "Recordings")
-                            }
                             IconButton(onClick = { localRefresh++ }) {
                                 Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                             }
@@ -541,7 +544,7 @@ internal fun SCallApp(
                 }
             },
             bottomBar = {
-                if (activeContact == null && photoEditor == null && page != "Settings" && page != "SIM Manager" && page != "Recording Manager") {
+                if (activeContact == null && photoEditor == null && page != "Settings" && page != "SIM Manager") {
                     NavigationBar(containerColor = scheme.surface, tonalElevation = 1.dp) {
                         tabs.forEach { tab ->
                             NavigationBarItem(
@@ -593,7 +596,6 @@ internal fun SCallApp(
                         requestDialerRole = requestDialerRole,
                         requestPermissions = requestPermissions,
                         onSimSettings = { navigateTo("SIM Manager") },
-                        onRecordingSettings = { navigateTo("Recording Manager") },
                         incomingAccess = IncomingCallVisibility.access(
                             context, repository.isDefaultDialer()
                         ),
@@ -609,7 +611,6 @@ internal fun SCallApp(
                             }
                         }
                     )
-                    page == "Recording Manager" -> RecordingSettingsScreen()
                     page == "SIM Manager" -> SimSettingsScreen(
                         repository = repository,
                         preferences = simPrefs,
@@ -1132,7 +1133,6 @@ private fun SettingsScreen(
     defaultDialer: Boolean, contactsGranted: Boolean, logsGranted: Boolean,
     requestDialerRole: () -> Unit, requestPermissions: () -> Unit,
     onSimSettings: () -> Unit,
-    onRecordingSettings: () -> Unit,
     incomingAccess: IncomingCallAccess,
     onFixIncomingCallDisplay: () -> Unit
 ) {
@@ -1142,25 +1142,6 @@ private fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Text("Settings", style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 5.dp, vertical = 8.dp)) }
-        item {
-            SettingsCard {
-                ListItem(
-                    leadingContent = {
-                        Icon(Icons.Default.FiberManualRecord, null,
-                            tint = MaterialTheme.colorScheme.primary)
-                    },
-                    headlineContent = {
-                        Text("Call Recording", fontWeight = FontWeight.Bold)
-                    },
-                    supportingContent = {
-                        Text("Private recording library · Import, play and manage audio. " +
-                            "SIM auto-recording unavailable.")
-                    },
-                    trailingContent = { Icon(Icons.Default.ChevronRight, "Open") },
-                    modifier = Modifier.clickable(onClick = onRecordingSettings)
-                )
-            }
-        }
         item {
             SettingsCard {
                 ListItem(
