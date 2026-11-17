@@ -1,4 +1,4 @@
-package com.scall.PhoneRow.data
+package com.scall.phone.data
 
 import android.Manifest
 import android.content.ContentProviderOperation
@@ -84,7 +84,7 @@ internal class ContactManager(private val context: Context) {
                         phoneLabel(v(3), v(4)), id)
                     EmailRow.CONTENT_ITEM_TYPE -> emails += ContactValue(v(2),
                         emailLabel(v(3), v(4)), id)
-                    ContactsContract.CommonDataKinds.NickNameRow.CONTENT_ITEM_TYPE ->
+                    ContactsContract.CommonDataKinds.Nickname.CONTENT_ITEM_TYPE ->
                         result = result.copy(nickname = v(2))
                     ContactsContract.CommonDataKinds.Organization.CONTENT_ITEM_TYPE ->
                         result = result.copy(company = v(2), jobTitle = v(5), department = v(6))
@@ -203,41 +203,34 @@ internal class ContactManager(private val context: Context) {
             }
             repeated(PhoneRow.CONTENT_ITEM_TYPE, person.phones, PhoneRow.TYPE, PhoneRow.LABEL, ::phoneType)
             repeated(EmailRow.CONTENT_ITEM_TYPE, person.emails, EmailRow.TYPE, EmailRow.LABEL, ::emailType)
-            val n = ContactsContract.CommonDataKinds.Nickname
-            single(n.CONTENT_ITEM_TYPE, mapOf(n.NAME to person.nickNameRow.trim()), person.nickNameRow.isNotBlank())
-            val o = ContactsContract.CommonDataKinds.Organization
-            single(o.CONTENT_ITEM_TYPE, mapOf(o.COMPANY to person.company.trim(),
-                o.TITLE to person.jobTitle.trim(), o.DEPARTMENT to person.department.trim()),
+            single(ContactsContract.CommonDataKinds.Nickname.CONTENT_ITEM_TYPE, mapOf(ContactsContract.CommonDataKinds.Nickname.NAME to person.nickname.trim()), person.nickname.isNotBlank())
+            single(ContactsContract.CommonDataKinds.Organization.CONTENT_ITEM_TYPE, mapOf(ContactsContract.CommonDataKinds.Organization.COMPANY to person.company.trim(),
+                ContactsContract.CommonDataKinds.Organization.TITLE to person.jobTitle.trim(), ContactsContract.CommonDataKinds.Organization.DEPARTMENT to person.department.trim()),
                 listOf(person.company, person.jobTitle, person.department).any { it.isNotBlank() })
-            val note = ContactsContract.CommonDataKinds.Note
-            single(note.CONTENT_ITEM_TYPE, mapOf(note.NOTE to person.notes.trim()), person.notes.isNotBlank())
-            val website = ContactsContract.CommonDataKinds.Website
-            single(website.CONTENT_ITEM_TYPE, mapOf(website.URL to person.website.trim()), person.website.isNotBlank())
-            val rel = ContactsContract.CommonDataKinds.Relation
-            single(rel.CONTENT_ITEM_TYPE, mapOf(rel.NAME to person.relationship.trim(),
-                rel.TYPE to rel.TYPE_OTHER), person.relationship.isNotBlank())
-            val postal = ContactsContract.CommonDataKinds.StructuredPostal
-            single(postal.CONTENT_ITEM_TYPE, mapOf(postal.STREET to person.street.trim(),
-                postal.CITY to person.city.trim(), postal.REGION to person.state.trim(),
-                postal.POSTCODE to person.postcode.trim(), postal.COUNTRY to person.country.trim(),
-                postal.TYPE to postal.TYPE_HOME),
+            single(ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE, mapOf(ContactsContract.CommonDataKinds.Note.NOTE to person.notes.trim()), person.notes.isNotBlank())
+            single(ContactsContract.CommonDataKinds.Website.CONTENT_ITEM_TYPE, mapOf(ContactsContract.CommonDataKinds.Website.URL to person.ContactsContract.CommonDataKinds.Website.trim()), person.ContactsContract.CommonDataKinds.Website.isNotBlank())
+            single(ContactsContract.CommonDataKinds.Relation.CONTENT_ITEM_TYPE, mapOf(ContactsContract.CommonDataKinds.Relation.NAME to person.relationship.trim(),
+                ContactsContract.CommonDataKinds.Relation.TYPE to ContactsContract.CommonDataKinds.Relation.TYPE_OTHER), person.relationship.isNotBlank())
+            single(ContactsContract.CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE, mapOf(ContactsContract.CommonDataKinds.StructuredPostal.STREET to person.street.trim(),
+                ContactsContract.CommonDataKinds.StructuredPostal.CITY to person.city.trim(), ContactsContract.CommonDataKinds.StructuredPostal.REGION to person.state.trim(),
+                ContactsContract.CommonDataKinds.StructuredPostal.POSTCODE to person.postcode.trim(), ContactsContract.CommonDataKinds.StructuredPostal.COUNTRY to person.country.trim(),
+                ContactsContract.CommonDataKinds.StructuredPostal.TYPE to ContactsContract.CommonDataKinds.StructuredPostal.TYPE_HOME),
                 listOf(person.street,person.city,person.state,person.postcode,person.country).any { it.isNotBlank() })
-            val event = ContactsContract.CommonDataKinds.Event
             // Query event types so a birthday edit never silently overwrites an anniversary.
             fun putDate(type: Int, value: String) {
-                val matched = existing[event.CONTENT_ITEM_TYPE].orEmpty().firstOrNull { row ->
-                    resolver.query(DataRow.CONTENT_URI, arrayOf(event.TYPE), "${DataRow._ID}=?",
+                val matched = existing[ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE].orEmpty().firstOrNull { row ->
+                    resolver.query(DataRow.CONTENT_URI, arrayOf(ContactsContract.CommonDataKinds.Event.TYPE), "${DataRow._ID}=?",
                         arrayOf(row.toString()), null)?.use { c ->
                         c.moveToFirst() && c.getInt(0) == type
                     } ?: false
                 }
                 if (value.isNotBlank()) {
-                    val values = mapOf(event.START_DATE to value.trim(), event.TYPE to type)
-                    ops += if (matched == null) ins(event.CONTENT_ITEM_TYPE, values) else upd(matched, values)
+                    val values = mapOf(ContactsContract.CommonDataKinds.Event.START_DATE to value.trim(), ContactsContract.CommonDataKinds.Event.TYPE to type)
+                    ops += if (matched == null) ins(ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE, values) else upd(matched, values)
                 } else if (matched != null) ops += delete(matched)
             }
-            putDate(event.TYPE_BIRTHDAY, person.birthday)
-            putDate(event.TYPE_ANNIVERSARY, person.anniversary)
+            putDate(ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY, person.birthday)
+            putDate(ContactsContract.CommonDataKinds.Event.TYPE_ANNIVERSARY, person.anniversary)
             val saved = resolver.applyBatch(ContactsContract.AUTHORITY, ops)
             val contactId = if (creating) {
                 val newRawId = saved.firstOrNull()?.uri?.lastPathSegment?.toLongOrNull()
