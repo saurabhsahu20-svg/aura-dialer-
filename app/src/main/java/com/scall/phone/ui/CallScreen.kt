@@ -138,12 +138,17 @@ internal fun CallScreen(
     val repo = remember { PhoneRepository(context.applicationContext) }
     val number = call?.number.orEmpty()
     var resolvedName by remember(number) { mutableStateOf("") }
-    var resolvedPhoto by remember(number) { mutableStateOf<String?>(store.photoFor(number)) }
+    var resolvedPhoto by remember(number) { mutableStateOf<String?>(null) }
     val photoStyle = remember(number) { store.styleFor(number) }
     LaunchedEffect(number) {
-        val contact = withContext(Dispatchers.IO) { repo.findContact(number) }
+        // Fetch photos/contact details off the UI thread; the call controls can
+        // be drawn and respond immediately even with a slow contacts provider.
+        val (contact, photo) = withContext(Dispatchers.IO) {
+            val matching = repo.findContact(number)
+            matching to (store.photoFor(number) ?: matching?.photo)
+        }
         resolvedName = contact?.name.orEmpty()
-        resolvedPhoto = store.photoFor(number) ?: contact?.photo
+        resolvedPhoto = photo
     }
     val name = resolvedName.ifBlank { call?.displayName?.ifBlank { number.ifBlank { "Unknown caller" } } ?: "S call" }
     val incoming = call?.state == Call.STATE_RINGING
