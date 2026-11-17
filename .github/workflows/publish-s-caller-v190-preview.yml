@@ -71,7 +71,9 @@ jobs:
           test ! -e app/src/main/java/com/scall/phone/ui/RecordingSettingsScreen.kt
           # Verify the selected logo is the one packaged for both launchers and UI.
           test -s app/src/main/res/drawable-nodpi/scall_rainbow_call_logo.webp
-          grep -q '@drawable/scall_rainbow_call_logo' app/src/main/AndroidManifest.xml
+          grep -q '@mipmap/ic_launcher' app/src/main/AndroidManifest.xml
+          grep -q '@drawable/scall_rainbow_call_logo' app/src/main/res/mipmap-anydpi/ic_launcher.xml
+          grep -q '@drawable/scall_rainbow_call_logo' app/src/main/res/mipmap-anydpi/ic_launcher_round.xml
           grep -q '@drawable/ic_launcher_rainbow_foreground' app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
           grep -q 'R.drawable.scall_rainbow_call_logo' app/src/main/java/com/scall/phone/ui/SCallApp.kt
           (cd release-output && sha256sum S-Caller-v1.9.0-preview.apk > SHA256SUMS.txt)
