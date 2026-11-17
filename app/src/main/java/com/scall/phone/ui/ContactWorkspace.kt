@@ -51,7 +51,8 @@ internal fun ContactWorkspace(
     onCall: (String) -> Unit,
     onMessage: (String) -> Unit,
     onPermissions: () -> Unit,
-    history: List<RecentEntry>
+    history: List<RecentEntry>,
+    backSignal: Int = 0
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -136,6 +137,11 @@ internal fun ContactWorkspace(
         }
     }
     fun leaveEditor() { if (dirty) confirmExit = true else onClose() }
+    LaunchedEffect(backSignal) {
+        if (backSignal > 0) {
+            if (editing && dirty) confirmExit = true else onClose()
+        }
+    }
 
     if (confirmExit) {
         AlertDialog(
@@ -364,6 +370,13 @@ internal fun ContactWorkspace(
 
     val allNumbers = numbers.ifEmpty { person.phones }.filter { it.value.isNotBlank() }
     val clipboard = LocalClipboardManager.current
+    Column(Modifier.fillMaxSize()) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onClose) { Icon(Icons.Default.ArrowBack, "Back") }
+        Text("Contact profile", style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -478,6 +491,7 @@ internal fun ContactWorkspace(
                 }
             }
         }
+    }
     }
 }
 
