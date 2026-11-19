@@ -567,12 +567,13 @@ internal fun SCallApp(
             topBar = {
                 if (managedContactId != null) {
                     // ContactWorkspace owns its simple full-screen profile/editor toolbar.
-                } else if (photoEditor != null || activeContact != null || page == "SIM Manager" || page == "Settings" ) {
+                } else if (photoEditor != null || activeContact != null || page == "SIM Manager" || page == "Settings" || page == "My Profile" ) {
                     TopAppBar(
                         title = { Text(when {
                             photoEditor != null -> "Caller photo"
                             activeContact != null -> "Contact details"
                             page == "SIM Manager" -> "SIM & network"
+                            page == "My Profile" -> "My Profile"
                             else -> "Settings"
                         }) },
                         navigationIcon = {
@@ -623,6 +624,9 @@ internal fun SCallApp(
                             IconButton(onClick = { navigateTo("SIM Manager") }) {
                                 Icon(Icons.Default.SimCard, contentDescription = "SIM and network preferences")
                             }
+                            IconButton(onClick = { navigateTo("My Profile") }) {
+                                Icon(Icons.Default.AccountCircle, contentDescription = "My Profile")
+                            }
                             IconButton(onClick = { navigateTo("Settings") }) {
                                 Icon(Icons.Default.Settings, contentDescription = "Settings")
                             }
@@ -633,7 +637,7 @@ internal fun SCallApp(
             },
             bottomBar = {
                 if (managedContactId == null && activeContact == null && photoEditor == null &&
-                    page != "Settings" && page != "SIM Manager") {
+                    page != "Settings" && page != "SIM Manager" && page != "My Profile") {
                     NavigationBar(containerColor = scheme.surface, tonalElevation = 2.dp) {
                         tabs.forEach { tab ->
                             NavigationBarItem(
@@ -747,6 +751,7 @@ internal fun SCallApp(
                         onMessage = { requestMessage(activeContact!!.number) },
                         onEditPhoto = { activeContact?.let(::openPhotoEditor) }
                     )
+                    page == "My Profile" -> MyProfileScreen()
                     page == "Settings" -> SettingsScreen(
                         theme = theme,
                         onThemeChanged = { theme = it; prefs.edit().putString("theme", it).apply() },
@@ -758,6 +763,7 @@ internal fun SCallApp(
                         requestDialerRole = requestDialerRole,
                         requestPermissions = requestPermissions,
                         onSimSettings = { navigateTo("SIM Manager") },
+                        onMyProfile = { navigateTo("My Profile") },
                         incomingAccess = IncomingCallVisibility.access(
                             context, repository.isDefaultDialer()
                         ),
@@ -1429,6 +1435,7 @@ private fun SettingsScreen(
     defaultDialer: Boolean, contactsGranted: Boolean, logsGranted: Boolean,
     requestDialerRole: () -> Unit, requestPermissions: () -> Unit,
     onSimSettings: () -> Unit,
+    onMyProfile: () -> Unit,
     incomingAccess: IncomingCallAccess,
     onFixIncomingCallDisplay: () -> Unit
 ) {
@@ -1438,6 +1445,16 @@ private fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Text("Settings", style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 5.dp, vertical = 8.dp)) }
+        item {
+            SettingsCard {
+                ListItem(
+                    headlineContent = { Text("My Profile", fontWeight = FontWeight.Bold) },
+                    supportingContent = { Text("Create, edit and save your personal profile") },
+                    leadingContent = { Icon(Icons.Default.AccountCircle, contentDescription = null) },
+                    modifier = Modifier.clickable(onClick = onMyProfile)
+                )
+            }
+        }
         item {
             SettingsCard {
                 ListItem(
