@@ -41,7 +41,7 @@ internal class CallerSafetyStore(private val context: Context) {
     suspend fun block(number: String): Boolean = withContext(Dispatchers.IO) {
         val raw = number.trim()
         if (raw.count(Char::isDigit) < 7) return@withContext false
-        if (!canManageBlockedNumbers()) return@withContext false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || !canManageBlockedNumbers()) return@withContext false
         runCatching {
             context.contentResolver.insert(
                 BlockedNumberContract.BlockedNumbers.CONTENT_URI,
@@ -53,7 +53,7 @@ internal class CallerSafetyStore(private val context: Context) {
     }
 
     suspend fun unblock(number: String): Boolean = withContext(Dispatchers.IO) {
-        if (!canManageBlockedNumbers()) return@withContext false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || !canManageBlockedNumbers()) return@withContext false
         runCatching {
             context.contentResolver.delete(
                 BlockedNumberContract.BlockedNumbers.CONTENT_URI,
@@ -64,7 +64,7 @@ internal class CallerSafetyStore(private val context: Context) {
     }
 
     suspend fun isBlocked(number: String): Boolean = withContext(Dispatchers.IO) {
-        if (!canManageBlockedNumbers()) return@withContext false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || !canManageBlockedNumbers()) return@withContext false
         runCatching { BlockedNumberContract.isBlocked(context, number.trim()) }.getOrDefault(false)
     }
 
