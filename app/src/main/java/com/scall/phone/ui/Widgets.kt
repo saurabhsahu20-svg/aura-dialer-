@@ -428,13 +428,8 @@ internal fun KeypadScreen(
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val hasNumber = value.any { it.isDigit() }
-    val matches = remember(value, contacts) {
-        val digits = value.filter(Char::isDigit)
-        if (digits.length < 2) emptyList() else contacts.filter {
-            it.number.filter(Char::isDigit).contains(digits) ||
-                t9(it.name).startsWith(digits)
-        }.take(3)
-    }
+    // Keep the keypad position constant while typing. Contact matches belong in
+    // the separate Contacts search, never between the typed digits and the keys.
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 17.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -552,47 +547,13 @@ internal fun KeypadScreen(
         ) {
             // Use the available space instead of the old fixed 75dp keypad rows.
             // On compact screens, retain 72dp touch targets and scroll if needed.
-            val rowHeight = adaptiveDialRowHeight(maxHeight.value, matches.size).dp
+            val rowHeight = adaptiveDialRowHeight(maxHeight.value, 0).dp
             Column(
                 modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                verticalArrangement = if (matches.isEmpty()) Arrangement.SpaceEvenly
-                    else Arrangement.Top
+                verticalArrangement = Arrangement.SpaceEvenly
             ) {
-                if (matches.isNotEmpty()) {
-                Text(
-                    "Matching contacts",
-                    modifier = Modifier.padding(start = 9.dp, bottom = 6.dp, top = 6.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                matches.forEach { item ->
-                    Surface(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 5.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        shape = RoundedCornerShape(15.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().clickable {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                onValueChange(cleanDialNumber(item.number))
-                            }.padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            ContactAvatar(item.name, item.photo, 30.dp)
-                            Spacer(Modifier.width(9.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(item.name, style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold, maxLines = 1)
-                                Text(item.number, style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                            }
-                            Icon(Icons.Default.ChevronRight, null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-            }
-                if (matches.isNotEmpty()) Spacer(Modifier.height(7.dp))
+                // No moving search suggestions: prevents accidental contact
+                // selection and keeps each dial key at a predictable position.
                 for (row in 0 until 4) {
                     Row(
                         modifier = Modifier.fillMaxWidth().height(rowHeight)
