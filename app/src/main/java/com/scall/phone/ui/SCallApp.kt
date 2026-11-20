@@ -1319,6 +1319,10 @@ private fun RecentsScreen(
                     FilterChip(
                         selected = filter == direction,
                         onClick = { filter = direction },
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = direction.callTint().copy(alpha = 0.07f),
+                            selectedContainerColor = direction.callTint().copy(alpha = 0.21f)
+                        ),
                         label = {
                             Text(
                                 "${direction.label} · $count",
