@@ -1,0 +1,78 @@
+name: Public S Caller v1.9.5 Incoming Call Popup Preview
+
+on:
+  push:
+    branches:
+      - feature/scaller-v195-my-profile
+    paths:
+      - .github/workflows/publish-v195-profile-preview.yml
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Install Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_MANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          "$SDK_MANAGER" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Check profile version
+        run: |
+          grep -q 'versionCode = 33' app/build.gradle.kts
+          grep -q 'versionName = "1.9.5"' app/build.gradle.kts
+          grep -q 'IncomingCallerPopup' app/src/main/java/com/scall/phone/telecom/CallUiActivity.kt
+          test -s app/src/main/java/com/scall/phone/ui/IncomingCallerPopup.kt
+      - name: Test lint and compile APK
+        run: gradle --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      - name: Verify identity and signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-output
+          cp app/build/outputs/apk/debug/app-debug.apk release-output/S-Caller-v1.9.5-Incoming-Call-Popup-Preview.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose release-output/S-Caller-v1.9.5-Incoming-Call-Popup-Preview.apk
+          BADGING="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging release-output/S-Caller-v1.9.5-Incoming-Call-Popup-Preview.apk)"
+          echo "$BADGING" | grep -q "package: name='com.scall.phone'"
+          echo "$BADGING" | grep -q "versionCode='33'"
+          echo "$BADGING" | grep -q "versionName='1.9.5'"
+          (cd release-output && sha256sum S-Caller-v1.9.5-Incoming-Call-Popup-Preview.apk > SHA256SUMS.txt)
+          (cd release-output && sha256sum -c SHA256SUMS.txt)
+      - name: Store verified installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: S-Caller-v1.9.5-Incoming-Call-Popup-Preview
+          path: release-output/
+          if-no-files-found: error
+      - name: Publish public developer preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > notes.md <<'EOF'
+          S Caller 1.9.5 Incoming Call Popup — DEVELOPER PREVIEW
+          
+          Compact incoming caller card with caller name and photo, Answer, Decline, and Hide.\n          A hidden caller card never disconnects the call; use the Android notification\n          to reopen. Toggle popup in Settings. Keeps profile, contacts and red badges.
+          
+          This developer preview is debug-signed, not a production stable
+          release. Certificate mismatch can prevent updating an installed
+          production APK. Uninstalling loses local data; back up first.
+          Real-call tests on physical devices remain necessary.
+          EOF
+          gh release create v1.9.5-incoming-popup-preview release-output/* \
+            --target "$GITHUB_SHA" \
+            --title "S Caller 1.9.5 — Incoming Call Popup Preview" \
+            --notes-file notes.md --prerelease
