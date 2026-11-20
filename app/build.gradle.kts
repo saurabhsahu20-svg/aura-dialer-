@@ -4,6 +4,14 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Signing credentials come from private CI environment, never from the public repository.
+val sCallerSigningFile = System.getenv("SCALL_SIGNING_STORE_FILE")
+val sCallerSigningPassword = System.getenv("SCALL_SIGNING_STORE_PASSWORD")
+val sCallerSigningAlias = System.getenv("SCALL_SIGNING_KEY_ALIAS")
+val sCallerSigningKeyPassword = System.getenv("SCALL_SIGNING_KEY_PASSWORD")
+val hasSCSigning = listOf(sCallerSigningFile, sCallerSigningPassword,
+    sCallerSigningAlias, sCallerSigningKeyPassword).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.scall.phone"
     compileSdk = 35
@@ -12,13 +20,26 @@ android {
         applicationId = "com.scall.phone"
         minSdk = 23
         targetSdk = 35
-        versionCode = 35
-        versionName = "1.9.7"
+        versionCode = 36
+        versionName = "1.9.8"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (hasSCSigning) {
+            create("stableUpgrade") {
+                storeFile = file(sCallerSigningFile!!)
+                storePassword = sCallerSigningPassword
+                keyAlias = sCallerSigningAlias
+                keyPassword = sCallerSigningKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
+            if (hasSCSigning) {
+                signingConfig = signingConfigs.getByName("stableUpgrade")
+            }
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
