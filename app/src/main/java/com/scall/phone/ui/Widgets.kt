@@ -12,8 +12,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -462,67 +461,6 @@ internal fun KeypadScreen(
                 Icon(Icons.Default.ChevronRight, null, Modifier.size(16.dp))
             }
         }
-        // Permanent space for matching contacts: never moves the digit keys.
-        Box(
-            modifier = Modifier.fillMaxWidth().height(98.dp).padding(bottom = 5.dp)
-        ) {
-            if (suggestions.isNotEmpty()) {
-                Column(Modifier.fillMaxSize()) {
-                    Text(
-                        "Matching contacts · ${suggestions.size}${if (suggestions.size == 30) "+" else ""}",
-                        modifier = Modifier.padding(start = 10.dp, bottom = 2.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth().weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        items(suggestions, key = { "${it.contact.id}:${it.number}" }) { suggestion ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth()
-                                    .clip(RoundedCornerShape(13.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                                    .clickable {
-                                        haptic.performHapticFeedback(
-                                            HapticFeedbackType.TextHandleMove
-                                        )
-                                        // Choosing a contact fills the number, NOT a call.
-                                        onValueChange(cleanDialNumber(suggestion.number))
-                                    }
-                                    .padding(horizontal = 10.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                ContactAvatar(suggestion.contact.name, suggestion.contact.photo, 29.dp)
-                                Spacer(Modifier.width(9.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(suggestion.contact.name,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.SemiBold, maxLines = 1)
-                                    Text(suggestion.number,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1)
-                                }
-                                Icon(Icons.Default.ChevronRight,
-                                    contentDescription = "Fill ${suggestion.contact.name} number",
-                                    tint = MaterialTheme.colorScheme.primary)
-                            }
-                        }
-                    }
-                }
-            } else {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        if (value.filter(Char::isDigit).length < 3)
-                            "Dial 3+ digits to search saved contacts"
-                        else "No matching saved contacts",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -534,7 +472,44 @@ internal fun KeypadScreen(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (matchedContact != null) {
+                    if (suggestions.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            suggestions.forEach { suggestion ->
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(11.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                        .clickable {
+                                            haptic.performHapticFeedback(
+                                                HapticFeedbackType.TextHandleMove
+                                            )
+                                            // Contact selection never directly places a call.
+                                            onValueChange(cleanDialNumber(suggestion.number))
+                                        }
+                                        .padding(horizontal = 6.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    ContactAvatar(
+                                        suggestion.contact.name,
+                                        suggestion.contact.photo,
+                                        23.dp
+                                    )
+                                    Spacer(Modifier.width(5.dp))
+                                    Text(
+                                        "${suggestion.contact.name} · ${suggestion.number}",
+                                        color = MaterialTheme.colorScheme.primary,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1
+                                    )
+                                }
+                                Spacer(Modifier.width(7.dp))
+                            }
+                        }
+                    } else if (matchedContact != null) {
                         ContactAvatar(matchedContact.name, matchedContact.photo, 26.dp)
                         Spacer(Modifier.width(7.dp))
                         Text(
