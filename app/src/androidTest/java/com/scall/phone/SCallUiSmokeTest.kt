@@ -58,7 +58,7 @@ class SCallUiSmokeTest {
     fun keypadDoesNotShiftOrSelectSuggestedContactsWhenTyping() {
         rule.onNodeWithContentDescription("Keypad", useUnmergedTree = true).performClick()
         rule.onNodeWithContentDescription("8, TUV").performClick()
-        rule.onNodeWithContentDescription("0, +").performClick()
+        rule.onNodeWithContentDescription("0, long press for plus").performClick()
         rule.onNodeWithContentDescription("8, TUV").performClick()
         rule.onNodeWithContentDescription("5, JKL").performClick()
         rule.onNodeWithText("Matching contacts").assertDoesNotExist()
