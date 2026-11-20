@@ -32,3 +32,40 @@ internal fun findDialedContact(dialed: String, contacts: List<ContactEntry>): Co
         (contact.allNumbers + contact.number).any(::matches)
     }
 }
+
+
+/** A suggestion always refers to a specific saved number, not just the primary contact. */
+internal data class DialContactSuggestion(val contact: ContactEntry, val number: String)
+
+/**
+ * Search saved phone numbers as digits arrive. Prefix matches first, then
+ * other substring matches; no country-code punctuation affects results.
+ * Results are capped for predictable performance on large contact lists.
+ */
+internal fun findDialContactSuggestions(
+    typed: String, contacts: List<ContactEntry>, limit: Int = 30
+): List<DialContactSuggestion> {
+    val query = typed.filter(Char::isDigit)
+    if (query.length < 3 || query.length > 15 || limit <= 0) return emptyList()
+    val matches = ArrayList<Pair<Int, DialContactSuggestion>>()
+    for (contact in contacts) {
+        val all = (contact.allNumbers + contact.number).distinctBy { it.filter(Char::isDigit) }
+        for (saved in all) {
+            val digits = saved.filter(Char::isDigit)
+            if (digits.length < query.length || !digits.contains(query)) continue
+            val national = if (digits.length == 12 && digits.startsWith("91")) digits.drop(2)
+                else if (digits.length == 11 && digits.startsWith("0")) digits.drop(1)
+                else digits
+            val rank = when {
+                national == query || digits == query -> 0
+                national.startsWith(query) -> 1
+                digits.startsWith(query) -> 2
+                else -> 3
+            }
+            matches.add(rank to DialContactSuggestion(contact, saved))
+        }
+    }
+    return matches.sortedWith(compareBy<Pair<Int, DialContactSuggestion>> { it.first }
+        .thenBy { it.second.contact.name.lowercase() })
+        .take(limit).map { it.second }
+}
