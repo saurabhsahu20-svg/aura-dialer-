@@ -12,6 +12,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -435,6 +436,7 @@ internal fun KeypadScreen(
     // O(contacts) only on number/contacts changes, never on touch animation.
     // A fixed-height label shows the exact saved match without moving the keys.
     val matchedContact = remember(value, contacts) { findDialedContact(value, contacts) }
+    val suggestions = remember(value, contacts) { findDialContactSuggestions(value, contacts) }
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 17.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -470,7 +472,44 @@ internal fun KeypadScreen(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (matchedContact != null) {
+                    if (suggestions.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            suggestions.forEach { suggestion ->
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(11.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                        .clickable {
+                                            haptic.performHapticFeedback(
+                                                HapticFeedbackType.TextHandleMove
+                                            )
+                                            // Contact selection never directly places a call.
+                                            onValueChange(cleanDialNumber(suggestion.number))
+                                        }
+                                        .padding(horizontal = 6.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    ContactAvatar(
+                                        suggestion.contact.name,
+                                        suggestion.contact.photo,
+                                        23.dp
+                                    )
+                                    Spacer(Modifier.width(5.dp))
+                                    Text(
+                                        "${suggestion.contact.name} · ${suggestion.number}",
+                                        color = MaterialTheme.colorScheme.primary,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1
+                                    )
+                                }
+                                Spacer(Modifier.width(7.dp))
+                            }
+                        }
+                    } else if (matchedContact != null) {
                         ContactAvatar(matchedContact.name, matchedContact.photo, 26.dp)
                         Spacer(Modifier.width(7.dp))
                         Text(
