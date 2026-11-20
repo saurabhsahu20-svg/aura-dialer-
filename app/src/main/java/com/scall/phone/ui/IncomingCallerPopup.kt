@@ -45,6 +45,7 @@ internal fun IncomingCallerPopup(call: CallSnapshot, onHide: () -> Unit) {
     val photos = remember { PhotoStore(context.applicationContext) }
     var savedName by remember(number) { mutableStateOf<String?>(null) }
     var photo by remember(number) { mutableStateOf<String?>(null) }
+    var buttonActionSent by remember(number) { mutableStateOf(false) }
 
     LaunchedEffect(number) {
         val found = withContext(Dispatchers.IO) {
@@ -110,14 +111,16 @@ internal fun IncomingCallerPopup(call: CallSnapshot, onHide: () -> Unit) {
                 Spacer(Modifier.height(25.dp))
                 Row(Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = CallBridge::reject,
+                    Button(onClick = { if (!buttonActionSent) { buttonActionSent = true; CallBridge.reject() } },
+                        enabled = !buttonActionSent,
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD83D4D)),
                         modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.CallEnd, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("Decline")
                     }
-                    Button(onClick = CallBridge::answer,
+                    Button(onClick = { if (!buttonActionSent) { buttonActionSent = true; CallBridge.answer() } },
+                        enabled = !buttonActionSent,
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF198B55)),
                         modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.Call, null, modifier = Modifier.size(18.dp))
@@ -125,6 +128,16 @@ internal fun IncomingCallerPopup(call: CallSnapshot, onHide: () -> Unit) {
                         Text("Answer")
                     }
                 }
+                Spacer(Modifier.height(12.dp))
+                Text("Or slide right to answer • left to decline",
+                    color = Color(0xFFD0E5D9),
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Center)
+                Spacer(Modifier.height(6.dp))
+                IncomingSlideControl(
+                    onAnswer = { if (!buttonActionSent) { buttonActionSent = true; CallBridge.answer() } },
+                    onDecline = { if (!buttonActionSent) { buttonActionSent = true; CallBridge.reject() } }
+                )
                 Spacer(Modifier.height(8.dp))
                 TextButton(onClick = onHide) {
                     Text("Hide • Keep ringing", color = Color(0xFFC7E8D6))

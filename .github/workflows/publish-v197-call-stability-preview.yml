@@ -1,0 +1,95 @@
+name: Public S Caller v1.9.7 Call Response Stability Preview
+
+on:
+  push:
+    branches:
+      - fix/scaller-v197-call-response-stability
+    paths:
+      - .github/workflows/publish-v197-call-stability-preview.yml
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Install Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_MANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          "$SDK_MANAGER" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Check profile version
+        run: |
+          grep -q 'versionCode = 35' app/build.gradle.kts
+          grep -q 'versionName = "1.9.7"' app/build.gradle.kts
+          ! grep -q 'Ready to connect?' app/src/main/java/com/scall/phone/ui/SCallApp.kt
+          grep -q 'IncomingSlideControl' app/src/main/java/com/scall/phone/ui/IncomingCallerPopup.kt
+          grep -q 'ringingAction' app/src/main/java/com/scall/phone/telecom/CallBridge.kt
+          grep -q 'cleanHistoryOpensRealKeypadFromBottomNavigation' app/src/androidTest/java/com/scall/phone/SCallUiSmokeTest.kt
+      - name: Test lint and compile APK
+        run: gradle --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      - name: Emulator interaction smoke tests (Android 35)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_4
+          script: gradle --no-daemon :app:connectedDebugAndroidTest
+      - name: Verify identity and signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-output
+          cp app/build/outputs/apk/debug/app-debug.apk release-output/S-Caller-v1.9.7-Call-Response-Stability-Preview.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose release-output/S-Caller-v1.9.7-Call-Response-Stability-Preview.apk
+          BADGING="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging release-output/S-Caller-v1.9.7-Call-Response-Stability-Preview.apk)"
+          echo "$BADGING" | grep -q "package: name='com.scall.phone'"
+          echo "$BADGING" | grep -q "versionCode='35'"
+          echo "$BADGING" | grep -q "versionName='1.9.7'"
+          (cd release-output && sha256sum S-Caller-v1.9.7-Call-Response-Stability-Preview.apk > SHA256SUMS.txt)
+          (cd release-output && sha256sum -c SHA256SUMS.txt)
+      - name: Store verified installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: S-Caller-v1.9.7-Call-Response-Stability-Preview
+          path: release-output/
+          if-no-files-found: error
+      - name: Publish public developer preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > notes.md <<'EOF'
+          S Caller 1.9.7 Call Response Stability — DEVELOPER PREVIEW
+          
+          Restores swipe-to-answer and swipe-to-decline inside the caller popup.
+          Tuning swipe response and preventing rapid duplicate incoming/outgoing
+          call actions. Keeps red badges, saved profiles and clean call history.
+          
+          This developer preview is debug-signed, not a production stable
+          release. Certificate mismatch can prevent updating an installed
+          production APK. Uninstalling loses local data; back up first.
+          Real-call tests on physical devices remain necessary.
+          EOF
+          TAG=v1.9.7-call-response-stability-preview
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$TAG" release-output/* --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$TAG" --target "$GITHUB_SHA" --notes-file notes.md --prerelease --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" release-output/* \
+              --target "$GITHUB_SHA" \
+              --title "S Caller 1.9.7 — Call Response Stability Preview" \
+              --notes-file notes.md --prerelease
+          fi

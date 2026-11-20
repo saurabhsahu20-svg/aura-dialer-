@@ -25,9 +25,11 @@ class SCallUiSmokeTest {
     }
 
     @Test
-    fun freshQuickDialCardOpensRealKeypad() {
-        rule.onNodeWithText("Ready to connect?").assertExists()
-        rule.onNodeWithText("Ready to connect?").performClick()
+    fun cleanHistoryOpensRealKeypadFromBottomNavigation() {
+        // The Ready to connect banner was removed by design in v1.9.6.
+        rule.onNodeWithText("Ready to connect?").assertDoesNotExist()
+        rule.onNodeWithText("Call history").assertExists()
+        rule.onNodeWithContentDescription("Keypad", useUnmergedTree = true).performClick()
         rule.onNodeWithText("Enter a number").assertExists()
     }
 
