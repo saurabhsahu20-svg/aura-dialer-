@@ -15,6 +15,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.view.WindowCompat
 import com.scall.phone.ui.CallScreen
+import com.scall.phone.ui.IncomingCallerPopup
+import android.telecom.Call
 import kotlinx.coroutines.delay
 
 class CallUiActivity : ComponentActivity() {
@@ -93,7 +95,13 @@ class CallUiActivity : ComponentActivity() {
                     noCallTimeout = CallBridge.current.value == null
                 }
             }
-            CallScreen(
+            val popupEnabled = remember {
+                getSharedPreferences("s_call_settings", MODE_PRIVATE)
+                    .getBoolean("incoming_popup_enabled", true)
+            }
+            if (popupEnabled && call?.state == Call.STATE_RINGING) {
+                IncomingCallerPopup(call = call!!, onHide = { finish() })
+            } else CallScreen(
                 call = call,
                 onClose = { finish() },
                 phoneServiceUnavailable = noCallTimeout,
