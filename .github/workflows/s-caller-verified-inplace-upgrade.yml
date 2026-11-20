@@ -1,4 +1,4 @@
-name: S Caller v1.9.8 Verified In-Place Upgrade APK
+name: S Caller v1.9.9 Verified In-Place Upgrade APK
 
 on:
   workflow_dispatch:
@@ -74,16 +74,16 @@ jobs:
           fi
           BADGING="$("$AAPT" dump badging "$APK")"
           echo "$BADGING" | grep -q "package: name='com.scall.phone'"
-          echo "$BADGING" | grep -q "versionCode='36'"
-          echo "$BADGING" | grep -q "versionName='1.9.8'"
+          echo "$BADGING" | grep -q "versionCode='37'"
+          echo "$BADGING" | grep -q "versionName='1.9.9'"
           mkdir -p release-output
-          cp "$APK" release-output/S-Caller-v1.9.8-Verified-Upgrade.apk
-          (cd release-output && sha256sum S-Caller-v1.9.8-Verified-Upgrade.apk > SHA256SUMS.txt)
+          cp "$APK" release-output/S-Caller-v1.9.9-Verified-Upgrade.apk
+          (cd release-output && sha256sum S-Caller-v1.9.9-Verified-Upgrade.apk > SHA256SUMS.txt)
           (cd release-output && sha256sum -c SHA256SUMS.txt)
       - name: Upload verified upgrade APK only
         uses: actions/upload-artifact@v4
         with:
-          name: S-Caller-v1.9.8-Same-Signature-Upgrade
+          name: S-Caller-v1.9.9-Same-Signature-Upgrade
           path: release-output/
           retention-days: 14
           if-no-files-found: error
