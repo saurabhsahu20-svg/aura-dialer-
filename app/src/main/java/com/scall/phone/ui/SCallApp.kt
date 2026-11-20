@@ -28,6 +28,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -661,7 +663,19 @@ internal fun SCallApp(
                                 },
                                 icon = {
                                     Box {
-                                        Icon(tab.icon, contentDescription = tab.label)
+                                        if (tab.label == "Keypad") {
+                                            Text(
+                                                "ABC",
+                                                modifier = Modifier.semantics {
+                                                    contentDescription = "Keypad"
+                                                },
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                fontSize = 13.sp
+                                            )
+                                        } else {
+                                            Icon(tab.icon, contentDescription = tab.label)
+                                        }
                                         if (tab.label == "Recents" && unreadMissedCalls > 0) {
                                             Badge(modifier = Modifier.align(Alignment.TopEnd).offset(x = 10.dp, y = (-7).dp),
                                                 containerColor = Color(0xFFF44336), contentColor = Color.White) {
@@ -1154,6 +1168,18 @@ private fun RecentsScreen(
     var checkingBlock by remember { mutableStateOf(false) }
     var expandedHistoryId by rememberSaveable { mutableStateOf<Long?>(null) }
     var filter by remember { mutableStateOf<CallDirection?>(null) }
+    val groupedCalls = remember(calls, filter, safetyFilter, safetyVersion, selectionMode) {
+        val visible = calls.filter { row ->
+            (filter == null || classifyCallDirection(row.type) == filter) &&
+                when (safetyFilter) {
+                    "Spam" -> safety.label(row.number) == 1
+                    "Non-spam" -> safety.label(row.number) == 2
+                    else -> true
+                }
+        }
+        if (selectionMode) visible.map { HistoryGroup(listOf(it)) }
+        else groupConsecutiveHistory(visible)
+    }
     val filteredCalls = remember(calls, filter, safetyFilter, safetyVersion) {
         calls.filter { row ->
             (filter == null || classifyCallDirection(row.type) == filter) &&
@@ -1317,13 +1343,16 @@ private fun RecentsScreen(
                     .padding(horizontal = 18.dp, vertical = 3.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                listOf("All" to calls.size, "Non-spam" to safeCount, "Spam" to spamCount).forEach { (label, count) ->
+                listOf("Non-spam" to safeCount, "Spam" to spamCount).forEach { (label, count) ->
                     FilterChip(
                         selected = safetyFilter == label,
-                        onClick = { safetyFilter = label },
+                        onClick = { safetyFilter = if (safetyFilter == label) "All" else label },
                         label = { Text("${label} · ${count}") }
                     )
                 }
+            }
+            if (safetyFilter != "All") {
+                TextButton(onClick = { safetyFilter = "All" }) { Text("Clear safety filter") }
             }
             Text("Spam / Non-spam labels are chosen by you, not automatically verified.",
                 modifier = Modifier.padding(start = 19.dp, end = 18.dp, bottom = 6.dp),
@@ -1368,7 +1397,8 @@ private fun RecentsScreen(
                 )
             }
         }
-        items(filteredCalls, key = { it.id }) { item ->
+        items(groupedCalls, key = { it.latest.id }) { group ->
+            val item = group.latest
             val direction = classifyCallDirection(item.type)
             val time = remember(item.timestamp) {
                 java.text.SimpleDateFormat("dd MMM, h:mm a", java.util.Locale.getDefault())
@@ -1384,7 +1414,7 @@ private fun RecentsScreen(
                     name = historyStore.title(item) ?: item.name,
                     number = item.number,
                     photoUri = photos.photoFor(item.number) ?: item.photo,
-                    subtitle = time + duration + if (note.isBlank()) "" else " · ${note.take(30)}",
+                    subtitle = time + duration + (if (group.count > 1) " · ${group.count} calls" else "") + if (note.isBlank()) "" else " · ${note.take(30)}",
                     missed = direction == CallDirection.MISSED,
                     callDirection = direction,
                     swipesEnabled = swipesEnabled && !selectionMode,
@@ -1395,6 +1425,42 @@ private fun RecentsScreen(
                         else expandedHistoryId = if (expandedHistoryId == item.id) null else item.id
                     }
                 )
+                if (!selectionMode && expandedHistoryId == item.id && group.count > 1) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(start = 30.dp, end = 18.dp, bottom = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text("Grouped calls · ${group.count}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = direction.callTint(),
+                            fontWeight = FontWeight.Bold)
+                        group.entries.drop(1).forEach { older ->
+                            val olderTime = remember(older.timestamp) {
+                                java.text.SimpleDateFormat("dd MMM, h:mm a", java.util.Locale.getDefault())
+                                    .format(java.util.Date(older.timestamp))
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    olderTime + (if (older.duration > 0)
+                                        " · ${formatCallDuration(older.duration)}" else ""),
+                                    modifier = Modifier.weight(1f),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = direction.callTint()
+                                )
+                                TextButton(onClick = { onEdit(older) }) {
+                                    Text("Edit", style = MaterialTheme.typography.labelSmall)
+                                }
+                                TextButton(onClick = { onDeleteOne(older) }) {
+                                    Text("Delete", color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
+                }
                 if (selectionMode) {
                     Row(
                         Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp),
