@@ -55,6 +55,17 @@ class SCallUiSmokeTest {
     }
 
     @Test
+    fun keypadDoesNotShiftOrSelectSuggestedContactsWhenTyping() {
+        rule.onNodeWithContentDescription("Keypad", useUnmergedTree = true).performClick()
+        rule.onNodeWithContentDescription("8, TUV").performClick()
+        rule.onNodeWithContentDescription("0, +").performClick()
+        rule.onNodeWithContentDescription("8, TUV").performClick()
+        rule.onNodeWithContentDescription("5, JKL").performClick()
+        rule.onNodeWithText("Matching contacts").assertDoesNotExist()
+        rule.onNodeWithText("Call").assertExists()
+    }
+
+    @Test
     fun keypadBackArrowReturnsToRecentsWithoutExitingApp() {
         rule.onNodeWithContentDescription("Keypad", useUnmergedTree = true).performClick()
         rule.onNodeWithText("Enter a number").assertExists()
