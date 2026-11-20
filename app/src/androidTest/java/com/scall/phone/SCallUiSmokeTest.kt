@@ -126,10 +126,11 @@ class SCallUiSmokeTest {
     }
 
     @Test
-    fun simSettingsAccessibleWithoutHomeBanner() {
-        rule.onNodeWithContentDescription("SIM and network preferences").performClick()
+    fun abcShortcutOpensKeypadAndSimPreferencesAreStillAvailable() {
+        rule.onNodeWithContentDescription("Open ABC keypad").performClick()
+        rule.onNodeWithText("Enter a number").assertExists()
+        rule.onNodeWithText("SIM", useUnmergedTree = true).performClick()
         rule.onNodeWithText("Detected SIM cards").assertExists()
         rule.onNodeWithContentDescription("Back").performClick()
-        rule.onNodeWithText("Call history").assertExists()
     }
 }
