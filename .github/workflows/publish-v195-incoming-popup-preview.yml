@@ -3,9 +3,9 @@ name: Public S Caller v1.9.5 Incoming Call Popup Preview
 on:
   push:
     branches:
-      - feature/scaller-v195-my-profile
+      - feature/scaller-v195-call-popup
     paths:
-      - .github/workflows/publish-v195-profile-preview.yml
+      - .github/workflows/publish-v195-incoming-popup-preview.yml
 
 permissions:
   contents: write
