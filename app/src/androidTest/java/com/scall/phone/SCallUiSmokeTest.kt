@@ -25,6 +25,14 @@ class SCallUiSmokeTest {
     }
 
     @Test
+    fun callHistoryActionsAreHiddenUntilEntryIsSelected() {
+        rule.onNodeWithText("Call history").assertExists()
+        // Emulator starts without real call history; no unsolicited action bar.
+        rule.onNodeWithText("Edit").assertDoesNotExist()
+        rule.onNodeWithText("Delete").assertDoesNotExist()
+    }
+
+    @Test
     fun cleanHistoryOpensRealKeypadFromBottomNavigation() {
         // The Ready to connect banner was removed by design in v1.9.6.
         rule.onNodeWithText("Ready to connect?").assertDoesNotExist()
