@@ -432,8 +432,9 @@ internal fun KeypadScreen(
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val hasNumber = value.any { it.isDigit() }
-    // Keep the keypad position constant while typing. Contact matches belong in
-    // the separate Contacts search, never between the typed digits and the keys.
+    // O(contacts) only on number/contacts changes, never on touch animation.
+    // A fixed-height label shows the exact saved match without moving the keys.
+    val matchedContact = remember(value, contacts) { findDialedContact(value, contacts) }
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 17.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -464,13 +465,34 @@ internal fun KeypadScreen(
             shape = RoundedCornerShape(22.dp)
         ) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp)) {
-                Text(
-                    if (value.isBlank()) "Enter a number" else "Phone number",
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelMedium
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(32.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (matchedContact != null) {
+                        ContactAvatar(matchedContact.name, matchedContact.photo, 26.dp)
+                        Spacer(Modifier.width(7.dp))
+                        Text(
+                            matchedContact.name,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                                .semantics { contentDescription = "Saved contact: ${matchedContact.name}" }
+                        )
+                    } else {
+                        Text(
+                            if (value.isBlank()) "Enter a number" else "Phone number",
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 55.dp),
                     verticalAlignment = Alignment.CenterVertically
