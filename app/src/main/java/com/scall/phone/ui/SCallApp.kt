@@ -1152,6 +1152,7 @@ private fun RecentsScreen(
     var safetyFilter by remember { mutableStateOf("All") }
     var blockedStatus by remember { mutableStateOf<Boolean?>(null) }
     var checkingBlock by remember { mutableStateOf(false) }
+    var expandedHistoryId by rememberSaveable { mutableStateOf<Long?>(null) }
     var filter by remember { mutableStateOf<CallDirection?>(null) }
     val filteredCalls = remember(calls, filter, safetyFilter, safetyVersion) {
         calls.filter { row ->
@@ -1390,40 +1391,50 @@ private fun RecentsScreen(
                     onCall = { onCall(item.number) },
                     onMessage = { onMessage(item.number) },
                     onClick = {
-                        if (selectionMode) onToggleSelected(item) else onDetails(item)
+                        if (selectionMode) onToggleSelected(item)
+                        else expandedHistoryId = if (expandedHistoryId == item.id) null else item.id
                     }
                 )
-                Row(
-                    Modifier.fillMaxWidth().padding(start = 22.dp, end = 18.dp, bottom = 7.dp),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (selectionMode) {
+                if (selectionMode) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Select", style = MaterialTheme.typography.labelSmall)
                         Checkbox(
                             checked = item.id in selectedIds,
                             onCheckedChange = { onToggleSelected(item) }
                         )
-                        Text("Select", style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.weight(1f))
-                    } else {
-                        Spacer(Modifier.weight(1f))
                     }
-                    TextButton(onClick = { selectedSafetyNumber = item.number }) {
-                        Icon(Icons.Default.Shield, null, Modifier.size(17.dp))
-                        Spacer(Modifier.width(3.dp))
-                        Text(if (safety.label(item.number) == 1) "Spam"
-                            else if (safety.label(item.number) == 2) "Safe" else "Safety")
-                    }
-                    TextButton(onClick = { onEdit(item) }) {
-                        Icon(Icons.Default.Edit, null, Modifier.size(17.dp))
-                        Spacer(Modifier.width(3.dp))
-                        Text("Edit")
-                    }
-                    TextButton(onClick = { onDeleteOne(item) }) {
-                        Icon(Icons.Default.DeleteOutline, null, Modifier.size(17.dp),
-                            tint = MaterialTheme.colorScheme.error)
-                        Spacer(Modifier.width(3.dp))
-                        Text("Delete", color = MaterialTheme.colorScheme.error)
+                } else if (expandedHistoryId == item.id) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(start = 12.dp, end = 14.dp, bottom = 7.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(onClick = { onDetails(item) }) {
+                            Icon(Icons.Default.Info, null, Modifier.size(17.dp))
+                            Spacer(Modifier.width(3.dp))
+                            Text("Details")
+                        }
+                        TextButton(onClick = { selectedSafetyNumber = item.number }) {
+                            Icon(Icons.Default.Shield, null, Modifier.size(17.dp))
+                            Spacer(Modifier.width(3.dp))
+                            Text(if (safety.label(item.number) == 1) "Spam"
+                                else if (safety.label(item.number) == 2) "Safe" else "Safety")
+                        }
+                        TextButton(onClick = { onEdit(item) }) {
+                            Icon(Icons.Default.Edit, null, Modifier.size(17.dp))
+                            Spacer(Modifier.width(3.dp))
+                            Text("Edit")
+                        }
+                        TextButton(onClick = { onDeleteOne(item); expandedHistoryId = null }) {
+                            Icon(Icons.Default.DeleteOutline, null, Modifier.size(17.dp),
+                                tint = MaterialTheme.colorScheme.error)
+                            Spacer(Modifier.width(3.dp))
+                            Text("Delete", color = MaterialTheme.colorScheme.error)
+                        }
                     }
                 }
                 HorizontalDivider(
