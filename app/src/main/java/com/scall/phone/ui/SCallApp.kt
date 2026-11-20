@@ -1425,7 +1425,7 @@ private fun RecentsScreen(
                     name = historyStore.title(item) ?: item.name,
                     number = item.number,
                     photoUri = photos.photoFor(item.number) ?: item.photo,
-                    subtitle = time + duration + (if (group.count > 1) " · ${group.count} calls" else "") + if (note.isBlank()) "" else " · ${note.take(30)}",
+                    subtitle = (if (group.count > 1) "${group.count} calls · " else "") + time + duration + if (note.isBlank()) "" else " · ${note.take(30)}",
                     missed = direction == CallDirection.MISSED,
                     callDirection = direction,
                     swipesEnabled = swipesEnabled && !selectionMode,
