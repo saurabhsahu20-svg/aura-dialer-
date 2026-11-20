@@ -35,10 +35,10 @@ class SwipeDecisionTest {
     @Test fun incomingSliderRequiresMostOfItsAvailableTravel() {
         val travelPx = 150f
         val threshold = requiredSlideDistance(travelPx, INCOMING_SLIDE_FRACTION)
-        assertEquals(123f, threshold, 0.01f)
-        assertEquals(SwipeAction.NONE, chooseSwipeAction(120f, threshold))
-        assertEquals(SwipeAction.POSITIVE, chooseSwipeAction(124f, threshold))
-        assertEquals(SwipeAction.NEGATIVE, chooseSwipeAction(-124f, threshold))
+        assertEquals(111f, threshold, 0.01f)
+        assertEquals(SwipeAction.NONE, chooseSwipeAction(110f, threshold))
+        assertEquals(SwipeAction.POSITIVE, chooseSwipeAction(112f, threshold))
+        assertEquals(SwipeAction.NEGATIVE, chooseSwipeAction(-112f, threshold))
     }
 
     @Test fun malformedGestureGeometryNeverTriggersCall() {
