@@ -45,6 +45,7 @@ import com.scall.phone.data.PhoneRepository
 import com.scall.phone.data.PhotoStore
 import com.scall.phone.data.RecentEntry
 import com.scall.phone.data.CallHistoryStore
+import com.scall.phone.data.CallerSafetyStore
 import com.scall.phone.data.SimAccount
 import com.scall.phone.data.SimPreferences
 import com.scall.phone.data.chooseCallRoute
@@ -1143,9 +1144,103 @@ private fun RecentsScreen(
     onMessage: (String) -> Unit,
     onDetails: (RecentEntry) -> Unit
 ) {
+    val context = LocalContext.current
+    val safety = remember { CallerSafetyStore(context.applicationContext) }
+    val safetyScope = rememberCoroutineScope()
+    var safetyVersion by remember { mutableIntStateOf(0) }
+    var selectedSafetyNumber by remember { mutableStateOf<String?>(null) }
+    var safetyFilter by remember { mutableStateOf("All") }
+    var blockedStatus by remember { mutableStateOf<Boolean?>(null) }
+    var checkingBlock by remember { mutableStateOf(false) }
     var filter by remember { mutableStateOf<CallDirection?>(null) }
-    val filteredCalls = remember(calls, filter) {
-        calls.filter { filter == null || classifyCallDirection(it.type) == filter }
+    val filteredCalls = remember(calls, filter, safetyFilter, safetyVersion) {
+        calls.filter { row ->
+            (filter == null || classifyCallDirection(row.type) == filter) &&
+                when (safetyFilter) {
+                    "Spam" -> safety.label(row.number) == 1
+                    "Non-spam" -> safety.label(row.number) == 2
+                    else -> true
+                }
+        }
+    }
+    val spamCount = remember(calls, safetyVersion) {
+        calls.count { safety.label(it.number) == 1 }
+    }
+    val safeCount = remember(calls, safetyVersion) {
+        calls.count { safety.label(it.number) == 2 }
+    }
+
+    if (selectedSafetyNumber != null) {
+        val number = selectedSafetyNumber!!
+        val currentLabel = safety.label(number)
+        LaunchedEffect(number) {
+            checkingBlock = true
+            blockedStatus = safety.isBlocked(number)
+            checkingBlock = false
+        }
+        AlertDialog(
+            onDismissRequest = { selectedSafetyNumber = null },
+            title = { Text("Number safety") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text(number)
+                    Text(
+                        when (currentLabel) {
+                            1 -> "Marked as spam by you"
+                            2 -> "Marked non-spam by you"
+                            else -> "Not classified. No verified spam database is connected."
+                        },
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text("Your labels stay on this phone; they do not automatically block calls.")
+                    Text(
+                        when {
+                            checkingBlock -> "Checking Android block status…"
+                            !safety.canManageBlockedNumbers() ->
+                                "System blocking requires Android 7+ and S Caller as your default phone app."
+                            blockedStatus == true -> "Blocked by Android"
+                            else -> "Not blocked by Android"
+                        }
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = {
+                            if (safety.setLabel(number, 1)) safetyVersion++
+                            selectedSafetyNumber = null
+                        }) { Text("Mark spam") }
+                        TextButton(onClick = {
+                            if (safety.setLabel(number, 2)) safetyVersion++
+                            selectedSafetyNumber = null
+                        }) { Text("Non-spam") }
+                    }
+                    TextButton(onClick = {
+                        if (safety.setLabel(number, 0)) safetyVersion++
+                        selectedSafetyNumber = null
+                    }) { Text("Remove label") }
+                }
+            },
+            confirmButton = {
+                if (safety.canManageBlockedNumbers()) {
+                    TextButton(enabled = !checkingBlock, onClick = {
+                        val shouldUnblock = blockedStatus == true
+                        checkingBlock = true
+                        safetyScope.launch {
+                            val ok = if (shouldUnblock) safety.unblock(number) else safety.block(number)
+                            val confirmed = safety.isBlocked(number)
+                            blockedStatus = confirmed
+                            checkingBlock = false
+                            Toast.makeText(context,
+                                if (ok && confirmed != shouldUnblock)
+                                    if (confirmed) "Number blocked" else "Number unblocked"
+                                else "Android could not change the block status",
+                                Toast.LENGTH_LONG).show()
+                        }
+                    }) { Text(if (blockedStatus == true) "Unblock" else "Block number") }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { selectedSafetyNumber = null }) { Text("Close") }
+            }
+        )
     }
     val incomingCount = calls.count { classifyCallDirection(it.type) == CallDirection.INCOMING }
     val outgoingCount = calls.count { classifyCallDirection(it.type) == CallDirection.OUTGOING }
@@ -1214,6 +1309,25 @@ private fun RecentsScreen(
                     )
                 }
             }
+        }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 18.dp, vertical = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("All" to calls.size, "Non-spam" to safeCount, "Spam" to spamCount).forEach { (label, count) ->
+                    FilterChip(
+                        selected = safetyFilter == label,
+                        onClick = { safetyFilter = label },
+                        label = { Text("$"+"{label} · $"+"{count}") }
+                    )
+                }
+            }
+            Text("Spam / Non-spam labels are chosen by you, not automatically verified.",
+                modifier = Modifier.padding(start = 19.dp, end = 18.dp, bottom = 6.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (selectionMode) {
             item {
@@ -1293,6 +1407,12 @@ private fun RecentsScreen(
                             modifier = Modifier.weight(1f))
                     } else {
                         Spacer(Modifier.weight(1f))
+                    }
+                    TextButton(onClick = { selectedSafetyNumber = item.number }) {
+                        Icon(Icons.Default.Shield, null, Modifier.size(17.dp))
+                        Spacer(Modifier.width(3.dp))
+                        Text(if (safety.label(item.number) == 1) "Spam"
+                            else if (safety.label(item.number) == 2) "Safe" else "Safety")
                     }
                     TextButton(onClick = { onEdit(item) }) {
                         Icon(Icons.Default.Edit, null, Modifier.size(17.dp))
