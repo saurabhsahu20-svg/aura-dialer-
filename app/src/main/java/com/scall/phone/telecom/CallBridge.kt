@@ -232,14 +232,29 @@ internal object CallBridge {
         )
     }
 
-    fun answer() = safeCallAction("answer") {
-        primaryCall()?.takeIf { it.state == Call.STATE_RINGING }
-            ?.answer(VideoProfile.STATE_AUDIO_ONLY)
+    // Android Telecom transitions asynchronously. Ignore accidental rapid repeat
+    // actions for the SAME call, but never block a different incoming call.
+    private var lastRingingActionCall: Call? = null
+    private var lastRingingActionAt = 0L
+
+    private inline fun ringingAction(action: (Call) -> Unit) {
+        val call = primaryCall()?.takeIf { it.state == Call.STATE_RINGING } ?: return
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (lastRingingActionCall === call && now - lastRingingActionAt < 1200L) return
+        lastRingingActionCall = call
+        lastRingingActionAt = now
+        try {
+            action(call)
+        } catch (error: RuntimeException) {
+            lastRingingActionCall = null
+            android.util.Log.w("SCallBridge", "Ringing action failed", error)
+            refresh()
+        }
     }
 
-    fun reject() = safeCallAction("reject") {
-        primaryCall()?.takeIf { it.state == Call.STATE_RINGING }?.reject(false, null)
-    }
+    fun answer() = ringingAction { it.answer(VideoProfile.STATE_AUDIO_ONLY) }
+
+    fun reject() = ringingAction { it.reject(false, null) }
 
     fun disconnect() = safeCallAction("disconnect") { primaryCall()?.disconnect() }
 
