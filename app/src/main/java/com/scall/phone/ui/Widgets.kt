@@ -580,6 +580,9 @@ internal fun KeypadScreen(
             val rowHeight = adaptiveDialRowHeight(
                 maxHeight.value - suggestionsHeight.value, 0
             ).dp
+            // On tall phones pin the keypad to the Call button.
+            // On compact phones enable scrolling only when keys truly overflow.
+            val keyScrollRequired = rowHeight.value * 4 > maxHeight.value - suggestionsHeight.value
             Column(Modifier.fillMaxSize()) {
                 Box(
                     modifier = Modifier.fillMaxWidth().height(suggestionsHeight)
@@ -657,9 +660,11 @@ internal fun KeypadScreen(
                     }
                 }
                 Column(
-                    modifier = Modifier.fillMaxWidth().weight(1f)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.SpaceEvenly
+                    modifier = Modifier.fillMaxWidth().weight(1f).then(
+                        if (keyScrollRequired) Modifier.verticalScroll(rememberScrollState())
+                        else Modifier
+                    ),
+                    verticalArrangement = if (keyScrollRequired) Arrangement.Top else Arrangement.Bottom
                 ) {
                     for (row in 0 until 4) {
                         Row(
