@@ -1320,7 +1320,7 @@ private fun RecentsScreen(
                     FilterChip(
                         selected = safetyFilter == label,
                         onClick = { safetyFilter = label },
-                        label = { Text("$"+"{label} · $"+"{count}") }
+                        label = { Text("${label} · ${count}") }
                     )
                 }
             }
