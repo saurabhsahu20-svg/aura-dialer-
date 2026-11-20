@@ -871,9 +871,6 @@ internal fun SCallApp(
                                 }
                             }
                         }
-                        if (page == "Recents" && query.isBlank()) {
-                            QuickDialCard(onOpenKeypad = { navigateTo("Keypad") })
-                        }
                         SearchField(value = query, onChange = { query = it })
                         when (page) {
                             "Contacts" -> ContactsScreen(
@@ -950,42 +947,6 @@ internal fun SCallApp(
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-/**
- * Small, real shortcut on Recents: a professional landing card without adding
- * fake calling, recording, spam-detection or VOIP capabilities.
- */
-@Composable
-private fun QuickDialCard(onOpenKeypad: () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 5.dp),
-        shape = RoundedCornerShape(22.dp),
-        color = scheme.primaryContainer,
-        tonalElevation = 1.dp
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenKeypad)
-                .padding(horizontal = 17.dp, vertical = 13.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text("Ready to connect?", color = scheme.onPrimaryContainer,
-                    fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(2.dp))
-                Text("Open keypad for a new call", color = scheme.onPrimaryContainer.copy(alpha = 0.8f),
-                    style = MaterialTheme.typography.bodySmall)
-            }
-            Box(
-                Modifier.size(44.dp).background(scheme.primary, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.Call, contentDescription = "Open keypad",
-                    tint = scheme.onPrimary, modifier = Modifier.size(22.dp))
             }
         }
     }
