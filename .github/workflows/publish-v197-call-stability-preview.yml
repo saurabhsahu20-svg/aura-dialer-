@@ -36,8 +36,16 @@ jobs:
           ! grep -q 'Ready to connect?' app/src/main/java/com/scall/phone/ui/SCallApp.kt
           grep -q 'IncomingSlideControl' app/src/main/java/com/scall/phone/ui/IncomingCallerPopup.kt
           grep -q 'ringingAction' app/src/main/java/com/scall/phone/telecom/CallBridge.kt
+          grep -q 'cleanHistoryOpensRealKeypadFromBottomNavigation' app/src/androidTest/java/com/scall/phone/SCallUiSmokeTest.kt
       - name: Test lint and compile APK
         run: gradle --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      - name: Emulator interaction smoke tests (Android 35)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_4
+          script: gradle --no-daemon :app:connectedDebugAndroidTest
       - name: Verify identity and signature
         shell: bash
         run: |
