@@ -249,13 +249,17 @@ internal fun SCallApp(
 
     fun dial(number: String, sim: PhoneAccountHandle? = null) {
         if (waitingForOutgoingCallUi) return // Ignore accidental double taps.
+        // Reserve the call transition before entering Telecom so rapid taps
+        // cannot place two calls while a synchronous OEM callback is pending.
+        waitingForOutgoingCallUi = true
         try {
             repository.placeCall(number, sim)
-            waitingForOutgoingCallUi = true
         } catch (error: SecurityException) {
+            waitingForOutgoingCallUi = false
             android.util.Log.e("SCall", "Phone permission denied while placing call", error)
             Toast.makeText(context, "Phone permission required", Toast.LENGTH_SHORT).show()
         } catch (error: Exception) {
+            waitingForOutgoingCallUi = false
             android.util.Log.e("SCall", "Android Telecom could not place call", error)
             Toast.makeText(context,
                 if (error is IllegalStateException) "Set S Caller as your default Phone app and retry"
