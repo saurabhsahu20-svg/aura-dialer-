@@ -574,18 +574,41 @@ internal fun KeypadScreen(
         BoxWithConstraints(
             modifier = Modifier.weight(1f).fillMaxWidth()
         ) {
-            // Keep exactly the same space reserved above the keypad, even
-            // when contacts appear/disappear, so digit touch targets never jump.
+            // Reserve a fixed search zone without shifting or squeezing touch targets
+            // when suggestions change. A single scroll container avoids large
+            // unused gaps between the last number key and Call action.
             val suggestionsHeight = if (maxHeight.value < 420f) 76.dp else 108.dp
             val rowHeight = adaptiveDialRowHeight(
                 maxHeight.value - suggestionsHeight.value, 0
             ).dp
-            // On tall phones pin the keypad to the Call button.
-            // On compact phones enable scrolling only when keys truly overflow.
-            val keyScrollRequired = rowHeight.value * 4 > maxHeight.value - suggestionsHeight.value
-            Column(Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Spacer(Modifier.height(suggestionsHeight))
+                for (row in 0 until 4) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(rowHeight)
+                            .padding(vertical = 5.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        for (col in 0 until 3) {
+                            val item = keypad[row * 3 + col]
+                            DialKey(
+                                digit = item.first,
+                                letters = item.second,
+                                modifier = Modifier.weight(1f),
+                                onTap = { onValueChange(appendDialKey(value, item.first)) },
+                                onLongTap = if (item.first == "0") {
+                                    { onValueChange(appendDialKey(value, "+")) }
+                                } else null
+                            )
+                        }
+                    }
+                }
+            }
                 Box(
-                    modifier = Modifier.fillMaxWidth().height(suggestionsHeight)
+                    modifier = Modifier.fillMaxWidth().height(suggestionsHeight).align(Alignment.TopCenter)
                         .padding(bottom = 4.dp)
                 ) {
                     if (suggestions.isNotEmpty()) {
@@ -659,35 +682,6 @@ internal fun KeypadScreen(
                         }
                     }
                 }
-                Column(
-                    modifier = Modifier.fillMaxWidth().weight(1f).then(
-                        if (keyScrollRequired) Modifier.verticalScroll(rememberScrollState())
-                        else Modifier
-                    ),
-                    verticalArrangement = if (keyScrollRequired) Arrangement.Top else Arrangement.Bottom
-                ) {
-                    for (row in 0 until 4) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().height(rowHeight)
-                                .padding(vertical = 5.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            for (col in 0 until 3) {
-                                val item = keypad[row * 3 + col]
-                                DialKey(
-                                    digit = item.first,
-                                    letters = item.second,
-                                    modifier = Modifier.weight(1f),
-                                    onTap = { onValueChange(appendDialKey(value, item.first)) },
-                                    onLongTap = if (item.first == "0") {
-                                        { onValueChange(appendDialKey(value, "+")) }
-                                    } else null
-                                )
-                            }
-                        }
-                    }
-                }
-            }
         }
         Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 11.dp),
