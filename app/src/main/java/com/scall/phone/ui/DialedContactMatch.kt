@@ -47,7 +47,9 @@ internal fun findDialContactSuggestions(
 ): List<DialContactSuggestion> {
     val query = typed.filter(Char::isDigit)
     if (query.length < 3 || query.length > 15 || limit <= 0) return emptyList()
-    val matches = ArrayList<Pair<Int, DialContactSuggestion>>()
+    // Cap candidates per rank: avoid sorting thousands of matches on each tap.
+    val cap = limit.coerceAtMost(40)
+    val buckets = Array(4) { ArrayList<DialContactSuggestion>(cap) }
     for (contact in contacts) {
         val all = (contact.allNumbers + contact.number).distinctBy { it.filter(Char::isDigit) }
         for (saved in all) {
@@ -62,10 +64,13 @@ internal fun findDialContactSuggestions(
                 digits.startsWith(query) -> 2
                 else -> 3
             }
-            matches.add(rank to DialContactSuggestion(contact, saved))
+            if (buckets[rank].size < cap) {
+                buckets[rank].add(DialContactSuggestion(contact, saved))
+            }
         }
     }
-    return matches.sortedWith(compareBy<Pair<Int, DialContactSuggestion>> { it.first }
-        .thenBy { it.second.contact.name.lowercase() })
-        .take(limit).map { it.second }
+    return buckets.asSequence()
+        .flatMap { bucket -> bucket.sortedBy { it.contact.name.lowercase() }.asSequence() }
+        .take(cap)
+        .toList()
 }
