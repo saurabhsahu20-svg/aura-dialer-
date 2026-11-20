@@ -629,8 +629,15 @@ internal fun SCallApp(
                             IconButton(onClick = { localRefresh++ }) {
                                 Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                             }
-                            IconButton(onClick = { navigateTo("SIM Manager") }) {
-                                Icon(Icons.Default.SimCard, contentDescription = "SIM and network preferences")
+                            IconButton(onClick = { navigateTo("Keypad") }) {
+                                Text(
+                                    "ABC",
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.semantics {
+                                        contentDescription = "Open ABC keypad"
+                                    }
+                                )
                             }
                             IconButton(onClick = { navigateTo("My Profile") }) {
                                 Icon(Icons.Default.AccountCircle, contentDescription = "My Profile")
