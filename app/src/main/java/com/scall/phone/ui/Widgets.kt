@@ -12,6 +12,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -435,6 +437,7 @@ internal fun KeypadScreen(
     // O(contacts) only on number/contacts changes, never on touch animation.
     // A fixed-height label shows the exact saved match without moving the keys.
     val matchedContact = remember(value, contacts) { findDialedContact(value, contacts) }
+    val suggestions = remember(value, contacts) { findDialContactSuggestions(value, contacts) }
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 17.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -571,35 +574,112 @@ internal fun KeypadScreen(
         BoxWithConstraints(
             modifier = Modifier.weight(1f).fillMaxWidth()
         ) {
-            // Use the available space instead of the old fixed 75dp keypad rows.
-            // On compact screens, retain 72dp touch targets and scroll if needed.
-            val rowHeight = adaptiveDialRowHeight(maxHeight.value, 0).dp
-            Column(
-                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.SpaceEvenly
-            ) {
-                // No moving search suggestions: prevents accidental contact
-                // selection and keeps each dial key at a predictable position.
-                for (row in 0 until 4) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().height(rowHeight)
-                            .padding(vertical = 5.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                    for (col in 0 until 3) {
-                        val item = keypad[row * 3 + col]
-                        DialKey(
-                            digit = item.first,
-                            letters = item.second,
-                            modifier = Modifier.weight(1f),
-                            onTap = {
-                                onValueChange(appendDialKey(value, item.first))
-                            },
-                            onLongTap = if (item.first == "0") {
-                                { onValueChange(appendDialKey(value, "+")) }
-                            } else null
-                        )
+            // Keep exactly the same space reserved above the keypad, even
+            // when contacts appear/disappear, so digit touch targets never jump.
+            val suggestionsHeight = if (maxHeight.value < 420f) 76.dp else 108.dp
+            val rowHeight = adaptiveDialRowHeight(
+                maxHeight.value - suggestionsHeight.value, 0
+            ).dp
+            Column(Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(suggestionsHeight)
+                        .padding(bottom = 4.dp)
+                ) {
+                    if (suggestions.isNotEmpty()) {
+                        Column {
+                            Text(
+                                "Matching contacts · ${suggestions.size}${if (suggestions.size == 30) "+" else ""}",
+                                modifier = Modifier.padding(start = 10.dp, bottom = 2.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            LazyColumn(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                items(suggestions, key = { "${it.contact.id}:${it.number}" }) { suggestion ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth()
+                                            .clip(RoundedCornerShape(13.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                                            .clickable {
+                                                // Fill the selected number only. NEVER dial directly.
+                                                haptic.performHapticFeedback(
+                                                    HapticFeedbackType.TextHandleMove
+                                                )
+                                                onValueChange(cleanDialNumber(suggestion.number))
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        ContactAvatar(
+                                            suggestion.contact.name,
+                                            suggestion.contact.photo,
+                                            29.dp
+                                        )
+                                        Spacer(Modifier.width(9.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(
+                                                suggestion.contact.name,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                maxLines = 1,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Text(
+                                                suggestion.number,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1
+                                            )
+                                        }
+                                        Icon(
+                                            Icons.Default.ChevronRight,
+                                            contentDescription = "Fill ${suggestion.contact.name} number",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Box(
+                            Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                if (value.filter(Char::isDigit).length < 3)
+                                    "Dial 3+ digits to search saved contacts"
+                                else "No matching saved contacts",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
                     }
+                }
+                Column(
+                    modifier = Modifier.fillMaxWidth().weight(1f)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    for (row in 0 until 4) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().height(rowHeight)
+                                .padding(vertical = 5.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            for (col in 0 until 3) {
+                                val item = keypad[row * 3 + col]
+                                DialKey(
+                                    digit = item.first,
+                                    letters = item.second,
+                                    modifier = Modifier.weight(1f),
+                                    onTap = { onValueChange(appendDialKey(value, item.first)) },
+                                    onLongTap = if (item.first == "0") {
+                                        { onValueChange(appendDialKey(value, "+")) }
+                                    } else null
+                                )
+                            }
+                        }
                     }
                 }
             }
