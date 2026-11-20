@@ -325,10 +325,11 @@ private fun CallTimer(call: CallSnapshot?) {
 }
 
 @Composable
-private fun IncomingSlideControl(onAnswer: () -> Unit, onDecline: () -> Unit) {
+internal fun IncomingSlideControl(onAnswer: () -> Unit, onDecline: () -> Unit) {
     var drag by remember { mutableFloatStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
     var feedbackGiven by remember { mutableStateOf(false) }
+    var actionSent by remember { mutableStateOf(false) }
     val answerNow by rememberUpdatedState(onAnswer)
     val declineNow by rememberUpdatedState(onDecline)
     val animated by animateFloatAsState(
@@ -338,6 +339,18 @@ private fun IncomingSlideControl(onAnswer: () -> Unit, onDecline: () -> Unit) {
     )
     val shown = if (dragging) drag else animated
     val haptics = LocalHapticFeedback.current
+    val answerOnce = {
+        if (!actionSent) {
+            actionSent = true
+            answerNow()
+        }
+    }
+    val declineOnce = {
+        if (!actionSent) {
+            actionSent = true
+            declineNow()
+        }
+    }
 
     BoxWithConstraints(Modifier.fillMaxWidth().height(98.dp)) {
         val density = LocalDensity.current
@@ -355,7 +368,7 @@ private fun IncomingSlideControl(onAnswer: () -> Unit, onDecline: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(
-                    Modifier.width(88.dp).clickable(onClick = declineNow)
+                    Modifier.width(88.dp).clickable(enabled = !actionSent, onClick = declineOnce)
                         .padding(vertical = 12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -366,7 +379,7 @@ private fun IncomingSlideControl(onAnswer: () -> Unit, onDecline: () -> Unit) {
                         fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                 }
                 Column(
-                    Modifier.width(88.dp).clickable(onClick = answerNow)
+                    Modifier.width(88.dp).clickable(enabled = !actionSent, onClick = answerOnce)
                         .padding(vertical = 12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -382,7 +395,8 @@ private fun IncomingSlideControl(onAnswer: () -> Unit, onDecline: () -> Unit) {
                     .size(70.dp)
                     .clip(CircleShape)
                     .background(Color.White)
-                    .pointerInput(maximum, threshold) {
+                    .pointerInput(maximum, threshold, actionSent) {
+                        if (actionSent) return@pointerInput
                         detectHorizontalDragGestures(
                             onDragStart = { dragging = true; feedbackGiven = false },
                             onDragEnd = {
@@ -391,8 +405,8 @@ private fun IncomingSlideControl(onAnswer: () -> Unit, onDecline: () -> Unit) {
                                 dragging = false
                                 feedbackGiven = false
                                 when (action) {
-                                    SwipeAction.POSITIVE -> answerNow()
-                                    SwipeAction.NEGATIVE -> declineNow()
+                                    SwipeAction.POSITIVE -> answerOnce()
+                                    SwipeAction.NEGATIVE -> declineOnce()
                                     SwipeAction.NONE -> Unit
                                 }
                             },
