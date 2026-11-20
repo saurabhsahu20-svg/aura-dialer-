@@ -581,28 +581,35 @@ internal fun KeypadScreen(
             val rowHeight = adaptiveDialRowHeight(
                 maxHeight.value - suggestionsHeight.value, 0
             ).dp
-            Column(
-                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.SpaceEvenly
+            // Anchor the final digit row directly above the fixed Call action.
+            // Explicit viewport height avoids vertical-scroll inner-measurement gaps.
+            val availableForKeys = (maxHeight.value - suggestionsHeight.value).coerceAtLeast(1f)
+            val keyViewportHeight = minOf(rowHeight.value * 4, availableForKeys).dp
+            Box(
+                modifier = Modifier.fillMaxWidth().height(keyViewportHeight)
+                    .align(Alignment.BottomCenter)
             ) {
-                Spacer(Modifier.height(suggestionsHeight))
-                for (row in 0 until 4) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().height(rowHeight)
-                            .padding(vertical = 5.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        for (col in 0 until 3) {
-                            val item = keypad[row * 3 + col]
-                            DialKey(
-                                digit = item.first,
-                                letters = item.second,
-                                modifier = Modifier.weight(1f),
-                                onTap = { onValueChange(appendDialKey(value, item.first)) },
-                                onLongTap = if (item.first == "0") {
-                                    { onValueChange(appendDialKey(value, "+")) }
-                                } else null
-                            )
+                Column(
+                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                ) {
+                    for (row in 0 until 4) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().height(rowHeight)
+                                .padding(vertical = 5.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            for (col in 0 until 3) {
+                                val item = keypad[row * 3 + col]
+                                DialKey(
+                                    digit = item.first,
+                                    letters = item.second,
+                                    modifier = Modifier.weight(1f),
+                                    onTap = { onValueChange(appendDialKey(value, item.first)) },
+                                    onLongTap = if (item.first == "0") {
+                                        { onValueChange(appendDialKey(value, "+")) }
+                                    } else null
+                                )
+                            }
                         }
                     }
                 }
