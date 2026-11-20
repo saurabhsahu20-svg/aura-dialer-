@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
@@ -201,7 +202,10 @@ internal fun SwipeContactRow(
     val shown = if (dragging) offset else springOffset
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
-    val surface = MaterialTheme.colorScheme.surface
+    // Distinct, theme-aware tints keep Incoming, Outgoing and Missed obvious.
+    val surface = callDirection?.callTint()?.copy(alpha = 0.12f)
+        ?.compositeOver(MaterialTheme.colorScheme.surface)
+        ?: MaterialTheme.colorScheme.surface
     val primary = MaterialTheme.colorScheme.primary
     val revealingCall = shown >= 0f
 
@@ -307,7 +311,7 @@ internal fun SwipeContactRow(
                         Text(
                             subtitle,
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = callDirection.callTint(),
                             maxLines = 1
                         )
                     }
