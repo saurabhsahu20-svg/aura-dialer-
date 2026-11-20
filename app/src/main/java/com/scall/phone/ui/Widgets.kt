@@ -586,7 +586,7 @@ internal fun KeypadScreen(
                         .padding(bottom = 4.dp)
                 ) {
                     if (suggestions.isNotEmpty()) {
-                        Column {
+                        Column(Modifier.fillMaxSize()) {
                             Text(
                                 "Matching contacts · ${suggestions.size}${if (suggestions.size == 30) "+" else ""}",
                                 modifier = Modifier.padding(start = 10.dp, bottom = 2.dp),
@@ -594,7 +594,7 @@ internal fun KeypadScreen(
                                 color = MaterialTheme.colorScheme.primary
                             )
                             LazyColumn(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().weight(1f),
                                 verticalArrangement = Arrangement.spacedBy(3.dp)
                             ) {
                                 items(suggestions, key = { "${it.contact.id}:${it.number}" }) { suggestion ->
