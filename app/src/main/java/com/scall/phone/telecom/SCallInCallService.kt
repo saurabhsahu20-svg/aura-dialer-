@@ -236,7 +236,11 @@ class SCallInCallService : InCallService() {
                     person, declineIntent, answerIntent
                 )
             )
-            builder.setFullScreenIntent(uiPending, true)
+            // Respect the user's preference. Heads-up rendering is controlled by Android.
+            if (getSharedPreferences("s_call_settings", MODE_PRIVATE)
+                    .getBoolean("incoming_popup_enabled", true)) {
+                builder.setFullScreenIntent(uiPending, true)
+            }
         } else {
             builder.setStyle(NotificationCompat.CallStyle.forOngoingCall(person, hangUpIntent))
         }
