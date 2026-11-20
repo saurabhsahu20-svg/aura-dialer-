@@ -91,6 +91,7 @@ internal fun SCallApp(
     val actionScope = rememberCoroutineScope()
     var theme by remember { mutableStateOf(prefs.getString("theme", "System") ?: "System") }
     var enableSwipes by remember { mutableStateOf(prefs.getBoolean("swipe_call", true)) }
+    var incomingPopupEnabled by remember { mutableStateOf(prefs.getBoolean("incoming_popup_enabled", true)) }
     var page by rememberSaveable { mutableStateOf("Recents") }
     var pageHistory by rememberSaveable { mutableStateOf(listOf<String>()) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -756,6 +757,8 @@ internal fun SCallApp(
                         theme = theme,
                         onThemeChanged = { theme = it; prefs.edit().putString("theme", it).apply() },
                         swipeEnabled = enableSwipes,
+                        incomingPopupEnabled = incomingPopupEnabled,
+                        onIncomingPopupChanged = { incomingPopupEnabled = it; prefs.edit().putBoolean("incoming_popup_enabled", it).apply() },
                         onSwipeEnabledChanged = { enableSwipes = it; prefs.edit().putBoolean("swipe_call", it).apply() },
                         defaultDialer = repository.isDefaultDialer(),
                         contactsGranted = repository.hasContactsPermission(),
@@ -1432,6 +1435,7 @@ private fun PhotoEditorScreen(contact: ContactEntry, photo: String?, onPick: () 
 private fun SettingsScreen(
     theme: String, onThemeChanged: (String) -> Unit,
     swipeEnabled: Boolean, onSwipeEnabledChanged: (Boolean) -> Unit,
+    incomingPopupEnabled: Boolean, onIncomingPopupChanged: (Boolean) -> Unit,
     defaultDialer: Boolean, contactsGranted: Boolean, logsGranted: Boolean,
     requestDialerRole: () -> Unit, requestPermissions: () -> Unit,
     onSimSettings: () -> Unit,
@@ -1445,6 +1449,20 @@ private fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Text("Settings", style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 5.dp, vertical = 8.dp)) }
+        item {
+            SettingsCard {
+                ListItem(
+                    headlineContent = { Text("Incoming caller popup", fontWeight = FontWeight.Bold) },
+                    supportingContent = {
+                        Text("Show a compact caller card with name, photo, Answer, Decline and Hide. Hiding does not reject the call. Android controls lock-screen and heads-up notifications.")
+                    },
+                    leadingContent = { Icon(Icons.Default.Call, contentDescription = null) },
+                    trailingContent = {
+                        Switch(checked = incomingPopupEnabled, onCheckedChange = onIncomingPopupChanged)
+                    }
+                )
+            }
+        }
         item {
             SettingsCard {
                 ListItem(
