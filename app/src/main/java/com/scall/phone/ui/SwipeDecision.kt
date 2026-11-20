@@ -2,7 +2,7 @@ package com.scall.phone.ui
 
 /** Strict travel distances; neither slide triggers before most of its available path. */
 internal const val CONTACT_SLIDE_FRACTION = 0.68f
-internal const val INCOMING_SLIDE_FRACTION = 0.82f
+internal const val INCOMING_SLIDE_FRACTION = 0.74f
 
 /** Required movement in px, capped to (0, travel]. Invalid geometry never triggers a swipe. */
 internal fun requiredSlideDistance(travelPx: Float, fraction: Float): Float =
