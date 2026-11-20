@@ -83,7 +83,13 @@ jobs:
           production APK. Uninstalling loses local data; back up first.
           Real-call tests on physical devices remain necessary.
           EOF
-          gh release create v1.9.7-call-response-stability-preview release-output/* \
-            --target "$GITHUB_SHA" \
-            --title "S Caller 1.9.7 — Call Response Stability Preview" \
-            --notes-file notes.md --prerelease
+          TAG=v1.9.7-call-response-stability-preview
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$TAG" release-output/* --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$TAG" --target "$GITHUB_SHA" --notes-file notes.md --prerelease --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" release-output/* \
+              --target "$GITHUB_SHA" \
+              --title "S Caller 1.9.7 — Call Response Stability Preview" \
+              --notes-file notes.md --prerelease
+          fi
