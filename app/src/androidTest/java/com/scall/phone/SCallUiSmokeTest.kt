@@ -74,6 +74,19 @@ class SCallUiSmokeTest {
     }
 
     @Test
+    fun keypadMessagingShowsAllAppsWithoutSendingAutomatically() {
+        rule.onNodeWithContentDescription("Keypad", useUnmergedTree = true).performClick()
+        rule.onNodeWithContentDescription("2, ABC").performClick()
+        rule.onNodeWithContentDescription("Message this number").performClick()
+        rule.onNodeWithText("Message this number").assertExists()
+        rule.onNodeWithText("SMS").assertExists()
+        rule.onNodeWithText("WhatsApp chat").assertExists()
+        rule.onNodeWithText("Telegram chat").assertExists()
+        rule.onNodeWithText("Close").performClick()
+        rule.onNodeWithText("WhatsApp chat").assertDoesNotExist()
+    }
+
+    @Test
     fun keypadBackArrowReturnsToRecentsWithoutExitingApp() {
         rule.onNodeWithContentDescription("Keypad", useUnmergedTree = true).performClick()
         rule.onNodeWithText("Enter a number").assertExists()
