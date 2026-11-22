@@ -35,3 +35,10 @@ internal fun externalChatLink(raw: String, app: ExternalChatApp): String? {
         ExternalChatApp.TELEGRAM -> "https://t.me/+$digits"
     }
 }
+
+
+/** Explicit package targeting avoids sending an app chat link to the browser first. */
+internal fun preferredChatPackages(app: ExternalChatApp): List<String> = when (app) {
+    ExternalChatApp.WHATSAPP -> listOf("com.whatsapp", "com.whatsapp.w4b")
+    ExternalChatApp.TELEGRAM -> listOf("org.telegram.messenger", "org.thunderdog.challegram")
+}
