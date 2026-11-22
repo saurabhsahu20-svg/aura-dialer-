@@ -3,7 +3,7 @@ name: Publish S Caller v1.9.16 WhatsApp Telegram Chat Preview
 on:
   push:
     branches:
-      - fix/scaller-v1915-whatsapp-telegram-chat-count
+      - feature/scaller-v1916-whatsapp-telegram-chat
     paths:
       - .github/workflows/publish-v1916-chat-shortcuts-preview.yml
 
