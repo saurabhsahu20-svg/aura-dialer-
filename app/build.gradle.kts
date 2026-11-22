@@ -20,8 +20,8 @@ android {
         applicationId = "com.scall.phone"
         minSdk = 23
         targetSdk = 35
-        versionCode = 43
-        versionName = "1.9.15"
+        versionCode = 44
+        versionName = "1.9.16"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
