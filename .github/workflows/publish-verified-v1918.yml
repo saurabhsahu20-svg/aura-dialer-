@@ -1,0 +1,30 @@
+name: Publish verified S Caller v1.9.18 APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download CI-verified APK from successful build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download 45052708233 --repo "$GITHUB_REPOSITORY" --name S-call-debug-apk --dir ./artifact
+      - name: Verify integrity and publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -f artifact/app-debug.apk
+          echo "b70be50fff490c40354f951cbb113b15836b2718850f0328319b38701a8c3aa2  artifact/app-debug.apk" | sha256sum -c -
+          cp artifact/app-debug.apk S-Caller-v1.9.18-WhatsApp-Telegram-Preview.apk
+          sha256sum S-Caller-v1.9.18-WhatsApp-Telegram-Preview.apk > SHA256SUMS.txt
+          gh release view v1.9.18-direct-chat-preview --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh release create v1.9.18-direct-chat-preview --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "S Caller v1.9.18 – WhatsApp & Telegram Preview" --notes "CI-verified debug APK from successful Android workflow. WhatsApp, Telegram and SMS choices. Device testing pending. Backup data before replacing a debug build signed with a different key." --prerelease
+          gh release upload v1.9.18-direct-chat-preview --repo "$GITHUB_REPOSITORY" S-Caller-v1.9.18-WhatsApp-Telegram-Preview.apk SHA256SUMS.txt --clobber
