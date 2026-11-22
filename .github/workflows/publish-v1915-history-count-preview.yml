@@ -1,0 +1,92 @@
+name: Publish S Caller v1.9.15 Accurate Call History Preview
+
+on:
+  push:
+    branches:
+      - fix/scaller-v1915-accurate-call-history-count
+    paths:
+      - .github/workflows/publish-v1915-history-count-preview.yml
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_MANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          "$SDK_MANAGER" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Confirm version and history pagination
+        shell: bash
+        run: |
+          grep -q 'versionCode = 43' app/build.gradle.kts
+          grep -q 'versionName = "1.9.15"' app/build.gradle.kts
+          grep -q 'CallHistoryPage' app/src/main/java/com/scall/phone/data/PhoneRepository.kt
+          grep -q 'Load older calls' app/src/main/java/com/scall/phone/ui/SCallApp.kt
+      - name: Unit tests, lint and APK build
+        run: gradle --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      - name: Verify APK and SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-output
+          APK=release-output/S-Caller-v1.9.15-Accurate-Call-History-Preview.apk
+          cp app/build/outputs/apk/debug/app-debug.apk "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          BADGING="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK")"
+          echo "$BADGING" | grep -q "package: name='com.scall.phone'"
+          echo "$BADGING" | grep -q "versionCode='43'"
+          echo "$BADGING" | grep -q "versionName='1.9.15'"
+          (cd release-output && sha256sum *.apk > SHA256SUMS.txt)
+          (cd release-output && sha256sum -c SHA256SUMS.txt)
+      - name: Upload verified GitHub Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: S-Caller-v1.9.15-Accurate-Call-History-Preview
+          path: release-output/
+          if-no-files-found: error
+      - name: Publish public GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<'EOF'
+          ## S Caller v1.9.15 — Accurate Call History (Developer Preview)
+
+          - Fixed the hard-coded 200-call history limit. All now shows the actual Android call-log total rather than merely the number of recent items loaded.
+          - Counts all Incoming, Outgoing, and Missed records in the call-log provider.
+          - Loads 250 recent entries first and lets you load 250 older entries at a time, up to a 10,000 item safety cap.
+          - Reuses cached contacts during paging to keep UI smooth.
+          - Fixes bulk-delete silently stopping at 200 selections; handles 100 IDs per batch and reports partial failures.
+          - Preserves previous End Call, spam, caller profile, contact search, and badge fixes.
+          - Real-device tests and device-provider total count must be verified by the user.
+
+          **Important:** This is a debug-signed, developer-preview APK. It is NOT a production or verified in-place update for apps signed with another certificate. Back up data before any uninstall. Real SIM-call hangup performance has not been tested on a physical phone.
+          EOF
+          TAG=v1.9.15-accurate-call-history-preview
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" release-output/* --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$TAG" --notes-file release-notes.md --prerelease --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" release-output/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "S Caller v1.9.15 — Accurate Call History Preview" \
+              --notes-file release-notes.md \
+              --prerelease
+          fi
