@@ -192,23 +192,30 @@ internal class PhoneRepository(private val context: Context) {
      * Returns -1 if blocked; never claim success when the system rejects the operation.
      */
     suspend fun deleteRecentCalls(ids: Set<Long>): Int = withContext(Dispatchers.IO) {
-        val valid = ids.filter { it > 0 }.distinct().take(200)
+        val valid = ids.filter { it > 0 }.distinct()
         if (valid.isEmpty()) return@withContext 0
         if (!isDefaultDialer() || !hasLogsPermission() || !hasWriteLogsPermission()) {
             return@withContext -1
         }
-        val where = "${CallLog.Calls._ID} IN (${valid.joinToString(",") { "?" }})"
-        try {
-            context.contentResolver.delete(
-                CallLog.Calls.CONTENT_URI,
-                where,
-                valid.map { it.toString() }.toTypedArray()
-            )
-        } catch (_: SecurityException) {
-            -1
-        } catch (_: Exception) {
-            -1
+        // Android ContentProvider SQL bindings have limits. Delete in bounded
+        // batches and return the ACTUAL number removed: no silent 200-item cutoff.
+        var deleted = 0
+        for (batch in valid.chunked(100)) {
+            val where = "${CallLog.Calls._ID} IN (${batch.joinToString(",") { "?" }})"
+            val changed = try {
+                context.contentResolver.delete(
+                    CallLog.Calls.CONTENT_URI,
+                    where,
+                    batch.map { it.toString() }.toTypedArray()
+                )
+            } catch (error: Exception) {
+                android.util.Log.w("SCall", "Call-log delete failed", error)
+                return@withContext if (deleted > 0) deleted else -1
+            }
+            deleted += changed.coerceAtLeast(0)
+            if (changed < batch.size) break
         }
+        deleted
     }
 
     suspend fun markMissedCallsRead(): Boolean = withContext(Dispatchers.IO) {
