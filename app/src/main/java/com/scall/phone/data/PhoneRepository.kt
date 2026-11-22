@@ -38,7 +38,13 @@ internal data class RecentEntry(
 )
 
 /** Total comes from the provider cursor; only requested rows are materialized. */
-internal data class CallHistoryPage(val entries: List<RecentEntry>, val totalCount: Int)
+internal data class CallHistoryPage(
+    val entries: List<RecentEntry>,
+    val totalCount: Int,
+    val incomingCount: Int = 0,
+    val outgoingCount: Int = 0,
+    val missedCount: Int = 0
+)
 
 
 internal data class SimAccount(val handle: PhoneAccountHandle, val label: String) {
@@ -140,6 +146,9 @@ internal class PhoneRepository(private val context: Context) {
         }.toMap()
         val recent = ArrayList<RecentEntry>(pageLimit)
         var totalCount = 0
+        var incomingCount = 0
+        var outgoingCount = 0
+        var missedCount = 0
         try {
             context.contentResolver.query(
                 CallLog.Calls.CONTENT_URI,
@@ -149,7 +158,13 @@ internal class PhoneRepository(private val context: Context) {
             )?.use { cursor ->
                 // Cursor count is the real Android call-log total, not the UI page size.
                 totalCount = cursor.count.coerceAtLeast(0)
-                while (cursor.moveToNext() && recent.size < pageLimit) {
+                while (cursor.moveToNext()) {
+                    when (cursor.getInt(3)) {
+                        CallLog.Calls.INCOMING_TYPE -> incomingCount++
+                        CallLog.Calls.OUTGOING_TYPE -> outgoingCount++
+                        CallLog.Calls.MISSED_TYPE -> missedCount++
+                    }
+                    if (recent.size >= pageLimit) continue
                     val number = cursor.getString(1).orEmpty()
                     val contact = byNumber[normalizeNumber(number).takeLast(10)]
                     val cachedName = cursor.getString(2).orEmpty()
@@ -168,7 +183,7 @@ internal class PhoneRepository(private val context: Context) {
             if (error is kotlinx.coroutines.CancellationException) throw error
             android.util.Log.w("SCall", "Call history provider unavailable", error)
         }
-        CallHistoryPage(recent, totalCount)
+        CallHistoryPage(recent, totalCount, incomingCount, outgoingCount, missedCount)
     }
 
     /**
