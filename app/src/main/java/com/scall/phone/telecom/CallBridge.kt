@@ -289,13 +289,7 @@ internal object CallBridge {
             .getOrDefault(emptyList()) + callbacks.keys)
             .distinct()
             .filter { it.state != Call.STATE_DISCONNECTED && it.state != Call.STATE_DISCONNECTING }
-        val call = liveCalls.firstOrNull { it.state == Call.STATE_ACTIVE }
-            ?: liveCalls.firstOrNull {
-                it.state == Call.STATE_DIALING || it.state == Call.STATE_CONNECTING
-            }
-            ?: liveCalls.firstOrNull { it.state == Call.STATE_HOLDING }
-            ?: liveCalls.firstOrNull { it.state == Call.STATE_RINGING }
-            ?: liveCalls.firstOrNull()
+        val call = liveCalls.minByOrNull { endCallPriority(it.state) }
         if (call == null) {
             refreshFromTelecom()
             return
