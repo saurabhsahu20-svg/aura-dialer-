@@ -123,6 +123,7 @@ internal fun SCallApp(
     var loadedOnce by remember { mutableStateOf(false) }
     var pendingNumber by remember { mutableStateOf<String?>(null) }
     var pendingSims by remember { mutableStateOf<List<SimAccount>>(emptyList()) }
+    var pendingChatNumber by remember { mutableStateOf<String?>(null) }
     var pendingSmsNumber by remember { mutableStateOf<String?>(null) }
     var pendingSmsSims by remember { mutableStateOf<List<SmsSubscription>>(emptyList()) }
     val currentCall by CallBridge.current.collectAsState()
@@ -343,7 +344,7 @@ internal fun SCallApp(
         }
     }
 
-    fun requestMessage(number: String) {
+    fun requestSms(number: String) {
         if (number.isBlank()) return
         val subs = repository.availableSmsSubscriptions()
         val preference = simPrefs.smsChoice()
@@ -353,6 +354,31 @@ internal fun SCallApp(
             selected != null -> openMessage(number, selected.subscriptionId)
             subs.size > 1 -> { pendingSmsSims = subs; pendingSmsNumber = number }
             else -> openMessage(number, subs.firstOrNull()?.subscriptionId)
+        }
+    }
+
+    // Never probe other people's account membership or auto-contact remote
+    // platforms. Only launch a messaging service after a deliberate tap.
+    fun requestMessage(number: String) {
+        if (number.isBlank()) return
+        pendingChatNumber = number
+    }
+
+    fun openExternalChat(number: String, app: ExternalChatApp) {
+        val uri = externalChatLink(number, app)
+        if (uri == null) {
+            Toast.makeText(context,
+                "Enter a valid international number (for example +91...).",
+                Toast.LENGTH_LONG).show()
+            return
+        }
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri))
+                .addCategory(Intent.CATEGORY_BROWSABLE))
+        } catch (error: Exception) {
+            android.util.Log.w("SCall", "Could not open messaging app link", error)
+            Toast.makeText(context, "No app can open this chat link",
+                Toast.LENGTH_LONG).show()
         }
     }
 
@@ -450,6 +476,60 @@ internal fun SCallApp(
                     }
                 },
                 confirmButton = { TextButton(onClick = { pendingNumber = null }) { Text("Cancel") } }
+            )
+        }
+        if (pendingChatNumber != null) {
+            val number = pendingChatNumber.orEmpty()
+            AlertDialog(
+                onDismissRequest = { pendingChatNumber = null },
+                title = { Text("Message this number") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(number, fontWeight = FontWeight.Bold)
+                        Text(
+                            "S Caller cannot verify whether this number uses WhatsApp " +
+                                "or Telegram. The chosen app will check when you open it.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        FilledTonalButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                pendingChatNumber = null
+                                requestSms(number)
+                            }
+                        ) {
+                            Icon(Icons.Default.Sms, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("SMS")
+                        }
+                        FilledTonalButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                pendingChatNumber = null
+                                openExternalChat(number, ExternalChatApp.WHATSAPP)
+                            }
+                        ) {
+                            Icon(Icons.Default.Chat, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("WhatsApp chat")
+                        }
+                        FilledTonalButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                pendingChatNumber = null
+                                openExternalChat(number, ExternalChatApp.TELEGRAM)
+                            }
+                        ) {
+                            Icon(Icons.Default.Send, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Telegram chat")
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { pendingChatNumber = null }) { Text("Close") }
+                }
             )
         }
         if (pendingSmsNumber != null) {
