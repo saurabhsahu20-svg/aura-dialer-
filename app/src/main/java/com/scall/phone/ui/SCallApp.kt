@@ -1545,6 +1545,44 @@ private fun RecentsScreen(
                 )
             }
         }
+        if (historyPage.totalCount > 0) {
+            item(key = "history_progress") {
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "Showing ${loadedCount} of ${historyPage.totalCount} calls",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (searchActive && moreAvailable) {
+                        Text(
+                            "Search covers loaded calls. Load older calls to search further back.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    if (moreAvailable) {
+                        Spacer(Modifier.height(8.dp))
+                        Button(onClick = onLoadMore, enabled = !loading) {
+                            if (loading) {
+                                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                            } else {
+                                Text("Load older calls")
+                            }
+                        }
+                    } else if (loadedCount >= 10_000 && historyPage.totalCount > loadedCount) {
+                        Text(
+                            "Reached the 10,000-call display limit",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
