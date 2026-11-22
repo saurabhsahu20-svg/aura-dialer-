@@ -372,12 +372,33 @@ internal fun SCallApp(
                 Toast.LENGTH_LONG).show()
             return
         }
+        val chatUrl = Uri.parse(uri)
+        // Launch a real installed messaging app first. On Android 11+, do
+        // not rely on PackageManager queries (restricted package visibility);
+        // startActivity itself tells us if each explicitly targeted app exists.
+        for (targetPackage in preferredChatPackages(app)) {
+            try {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, chatUrl)
+                        .addCategory(Intent.CATEGORY_BROWSABLE)
+                        .setPackage(targetPackage)
+                )
+                return
+            } catch (_: android.content.ActivityNotFoundException) {
+                // This variant isn't installed or doesn't accept the link.
+            } catch (error: SecurityException) {
+                android.util.Log.w("SCall", "Messaging app blocked launch", error)
+            }
+        }
+        // Browser is a fallback, never a reason to claim a chat account exists.
         try {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri))
-                .addCategory(Intent.CATEGORY_BROWSABLE))
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, chatUrl)
+                    .addCategory(Intent.CATEGORY_BROWSABLE)
+            )
         } catch (error: Exception) {
-            android.util.Log.w("SCall", "Could not open messaging app link", error)
-            Toast.makeText(context, "No app can open this chat link",
+            android.util.Log.w("SCall", "Could not open messaging link", error)
+            Toast.makeText(context, "Install WhatsApp or Telegram to open this chat",
                 Toast.LENGTH_LONG).show()
         }
     }
