@@ -37,6 +37,16 @@ internal data class RecentEntry(
     val photo: String?
 )
 
+/** Total comes from the provider cursor; only requested rows are materialized. */
+internal data class CallHistoryPage(
+    val entries: List<RecentEntry>,
+    val totalCount: Int,
+    val incomingCount: Int = 0,
+    val outgoingCount: Int = 0,
+    val missedCount: Int = 0
+)
+
+
 internal data class SimAccount(val handle: PhoneAccountHandle, val label: String) {
     val key: String get() = SimPreferences.accountKey(handle)
 }
@@ -125,12 +135,20 @@ internal class PhoneRepository(private val context: Context) {
         }
     }
 
-    suspend fun recentCalls(contacts: List<ContactEntry>): List<RecentEntry> = withContext(Dispatchers.IO) {
-        if (!hasLogsPermission()) return@withContext emptyList()
+    suspend fun recentCalls(
+        contacts: List<ContactEntry>,
+        maxRows: Int = 250
+    ): CallHistoryPage = withContext(Dispatchers.IO) {
+        if (!hasLogsPermission()) return@withContext CallHistoryPage(emptyList(), 0)
+        val pageLimit = maxRows.coerceIn(1, 10_000)
         val byNumber = contacts.flatMap { item ->
             item.allNumbers.map { normalizeNumber(it).takeLast(10) to item }
         }.toMap()
-        val recent = mutableListOf<RecentEntry>()
+        val recent = ArrayList<RecentEntry>(pageLimit)
+        var totalCount = 0
+        var incomingCount = 0
+        var outgoingCount = 0
+        var missedCount = 0
         try {
             context.contentResolver.query(
                 CallLog.Calls.CONTENT_URI,
@@ -138,7 +156,15 @@ internal class PhoneRepository(private val context: Context) {
                     CallLog.Calls.TYPE, CallLog.Calls.DATE, CallLog.Calls.DURATION),
                 null, null, "${CallLog.Calls.DATE} DESC"
             )?.use { cursor ->
-                while (cursor.moveToNext() && recent.size < 200) {
+                // Cursor count is the real Android call-log total, not the UI page size.
+                totalCount = cursor.count.coerceAtLeast(0)
+                while (cursor.moveToNext()) {
+                    when (cursor.getInt(3)) {
+                        CallLog.Calls.INCOMING_TYPE -> incomingCount++
+                        CallLog.Calls.OUTGOING_TYPE -> outgoingCount++
+                        CallLog.Calls.MISSED_TYPE -> missedCount++
+                    }
+                    if (recent.size >= pageLimit) continue
                     val number = cursor.getString(1).orEmpty()
                     val contact = byNumber[normalizeNumber(number).takeLast(10)]
                     val cachedName = cursor.getString(2).orEmpty()
@@ -157,7 +183,7 @@ internal class PhoneRepository(private val context: Context) {
             if (error is kotlinx.coroutines.CancellationException) throw error
             android.util.Log.w("SCall", "Call history provider unavailable", error)
         }
-        recent
+        CallHistoryPage(recent, totalCount, incomingCount, outgoingCount, missedCount)
     }
 
     /**
@@ -166,23 +192,30 @@ internal class PhoneRepository(private val context: Context) {
      * Returns -1 if blocked; never claim success when the system rejects the operation.
      */
     suspend fun deleteRecentCalls(ids: Set<Long>): Int = withContext(Dispatchers.IO) {
-        val valid = ids.filter { it > 0 }.distinct().take(200)
+        val valid = ids.filter { it > 0 }.distinct()
         if (valid.isEmpty()) return@withContext 0
         if (!isDefaultDialer() || !hasLogsPermission() || !hasWriteLogsPermission()) {
             return@withContext -1
         }
-        val where = "${CallLog.Calls._ID} IN (${valid.joinToString(",") { "?" }})"
-        try {
-            context.contentResolver.delete(
-                CallLog.Calls.CONTENT_URI,
-                where,
-                valid.map { it.toString() }.toTypedArray()
-            )
-        } catch (_: SecurityException) {
-            -1
-        } catch (_: Exception) {
-            -1
+        // Android ContentProvider SQL bindings have limits. Delete in bounded
+        // batches and return the ACTUAL number removed: no silent 200-item cutoff.
+        var deleted = 0
+        for (batch in valid.chunked(100)) {
+            val where = "${CallLog.Calls._ID} IN (${batch.joinToString(",") { "?" }})"
+            val changed = try {
+                context.contentResolver.delete(
+                    CallLog.Calls.CONTENT_URI,
+                    where,
+                    batch.map { it.toString() }.toTypedArray()
+                )
+            } catch (error: Exception) {
+                android.util.Log.w("SCall", "Call-log delete failed", error)
+                return@withContext if (deleted > 0) deleted else -1
+            }
+            deleted += changed.coerceAtLeast(0)
+            if (changed < batch.size) break
         }
+        deleted
     }
 
     suspend fun markMissedCallsRead(): Boolean = withContext(Dispatchers.IO) {
