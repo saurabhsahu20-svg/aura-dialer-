@@ -43,6 +43,7 @@ import com.scall.phone.data.ContactManager
 import com.scall.phone.data.ContactGroup
 import com.scall.phone.data.CallStartAccess
 import com.scall.phone.data.callStartAccess
+import com.scall.phone.data.CallHistoryPage
 import com.scall.phone.data.PhoneRepository
 import com.scall.phone.data.PhotoStore
 import com.scall.phone.data.RecentEntry
@@ -108,6 +109,9 @@ internal fun SCallApp(
     var localRefresh by remember { mutableIntStateOf(0) }
     var contacts by remember { mutableStateOf<List<ContactEntry>>(emptyList()) }
     var recents by remember { mutableStateOf<List<RecentEntry>>(emptyList()) }
+    var historyPage by remember { mutableStateOf(CallHistoryPage(emptyList(), 0)) }
+    var historyLoadLimit by rememberSaveable { mutableIntStateOf(250) }
+    var lastContactRefreshKey by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var editingHistory by remember { mutableStateOf<RecentEntry?>(null) }
     var historyTitle by rememberSaveable { mutableStateOf("") }
     var historyNote by rememberSaveable { mutableStateOf("") }
@@ -204,17 +208,20 @@ internal fun SCallApp(
         navigateBack()
     }
 
-    LaunchedEffect(refreshVersion, localRefresh) {
-        // Keep the last successful list visible while Android reloads content providers.
-        // This prevents the Recents/Contacts screens flashing a loading state
-        // whenever returning from a call or system permission dialog.
+    LaunchedEffect(refreshVersion, localRefresh, historyLoadLimit) {
+        // Refresh both providers when phone data changes. Loading older calls
+        // reuses cached contacts, avoiding an expensive contacts scan each page.
         if (!loadedOnce) isLoading = true
+        val refreshKey = refreshVersion to localRefresh
         try {
-            val newContacts = repository.contacts()
-            val newRecents = repository.recentCalls(newContacts)
+            val shouldRefreshContacts = !loadedOnce || lastContactRefreshKey != refreshKey
+            val newContacts = if (shouldRefreshContacts) repository.contacts() else contacts
+            val newPage = repository.recentCalls(newContacts, historyLoadLimit)
             contacts = newContacts
-            recents = newRecents
-            MissedCallBadges.refresh(context)
+            recents = newPage.entries
+            historyPage = newPage
+            lastContactRefreshKey = refreshKey
+            if (shouldRefreshContacts) MissedCallBadges.refresh(context)
             loadedOnce = true
         } catch (error: kotlinx.coroutines.CancellationException) {
             throw error
@@ -940,6 +947,11 @@ internal fun SCallApp(
                             )
                             else -> RecentsScreen(
                                 calls = matchedRecents,
+                                historyPage = historyPage,
+                                searchActive = query.isNotBlank(),
+                                onLoadMore = {
+                                    historyLoadLimit = (historyLoadLimit + 250).coerceAtMost(10_000)
+                                },
                                 photos = photos, historyStore = historyStore, loading = isLoading,
                                 swipesEnabled = enableSwipes,
                                 selectionMode = historySelectionMode,
@@ -1149,6 +1161,9 @@ private fun ContactsScreen(
 @Composable
 private fun RecentsScreen(
     calls: List<RecentEntry>,
+    historyPage: CallHistoryPage,
+    searchActive: Boolean,
+    onLoadMore: () -> Unit,
     photos: PhotoStore,
     historyStore: CallHistoryStore,
     loading: Boolean,
@@ -1276,9 +1291,19 @@ private fun RecentsScreen(
             }
         )
     }
-    val incomingCount = calls.count { classifyCallDirection(it.type) == CallDirection.INCOMING }
-    val outgoingCount = calls.count { classifyCallDirection(it.type) == CallDirection.OUTGOING }
-    val missedCount = calls.count { classifyCallDirection(it.type) == CallDirection.MISSED }
+    // Use exact provider totals outside search; local counts only while searching.
+    val totalCount = if (searchActive) calls.size else historyPage.totalCount
+    val incomingCount = if (searchActive) calls.count {
+        classifyCallDirection(it.type) == CallDirection.INCOMING
+    } else historyPage.incomingCount
+    val outgoingCount = if (searchActive) calls.count {
+        classifyCallDirection(it.type) == CallDirection.OUTGOING
+    } else historyPage.outgoingCount
+    val missedCount = if (searchActive) calls.count {
+        classifyCallDirection(it.type) == CallDirection.MISSED
+    } else historyPage.missedCount
+    val loadedCount = historyPage.entries.size
+    val moreAvailable = historyPage.totalCount > loadedCount && loadedCount < 10_000
 
     LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
@@ -1290,7 +1315,7 @@ private fun RecentsScreen(
                 Column {
                     Text("Call history", style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold)
-                    Text("${calls.size} calls · ${missedCount} missed",
+                    Text("${totalCount} calls · ${missedCount} missed",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.labelMedium)
                 }
@@ -1313,7 +1338,7 @@ private fun RecentsScreen(
                 FilterChip(
                     selected = filter == null,
                     onClick = { filter = null },
-                    label = { Text("All · ${calls.size}") },
+                    label = { Text("All · ${totalCount}") },
                     leadingIcon = {
                         Icon(Icons.Default.History, null, Modifier.size(17.dp))
                     }
