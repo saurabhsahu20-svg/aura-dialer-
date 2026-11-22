@@ -29,6 +29,20 @@ class ExternalChatLinksTest {
         assertNull(chatPhoneDigits("12345678901234567890"))
     }
 
+    @Test fun leadingCountryCodeMustNotContainMisplacedPlusOrUnicodeDigits() {
+        assertNull(chatPhoneDigits("7224+858148"))
+        assertNull(chatPhoneDigits("91+7224858148"))
+        assertNull(chatPhoneDigits("+91+7224858148"))
+        assertNull(chatPhoneDigits("٧٢٢٤٨٥٨١٤٨"))
+    }
+
+    @Test fun installedMessagingAppsHaveExplicitPreferredPackages() {
+        assertEquals(listOf("com.whatsapp", "com.whatsapp.w4b"),
+            preferredChatPackages(ExternalChatApp.WHATSAPP))
+        assertEquals(listOf("org.telegram.messenger", "org.thunderdog.challegram"),
+            preferredChatPackages(ExternalChatApp.TELEGRAM))
+    }
+
     @Test fun explicitlyInternationalNumberOtherCountryIsPreserved() {
         assertEquals("447700900123", chatPhoneDigits("+44 7700 900123"))
     }
