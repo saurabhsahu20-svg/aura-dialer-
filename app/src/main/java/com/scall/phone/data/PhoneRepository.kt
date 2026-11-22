@@ -37,6 +37,10 @@ internal data class RecentEntry(
     val photo: String?
 )
 
+/** Total comes from the provider cursor; only requested rows are materialized. */
+internal data class CallHistoryPage(val entries: List<RecentEntry>, val totalCount: Int)
+
+
 internal data class SimAccount(val handle: PhoneAccountHandle, val label: String) {
     val key: String get() = SimPreferences.accountKey(handle)
 }
@@ -125,12 +129,17 @@ internal class PhoneRepository(private val context: Context) {
         }
     }
 
-    suspend fun recentCalls(contacts: List<ContactEntry>): List<RecentEntry> = withContext(Dispatchers.IO) {
-        if (!hasLogsPermission()) return@withContext emptyList()
+    suspend fun recentCalls(
+        contacts: List<ContactEntry>,
+        maxRows: Int = 250
+    ): CallHistoryPage = withContext(Dispatchers.IO) {
+        if (!hasLogsPermission()) return@withContext CallHistoryPage(emptyList(), 0)
+        val pageLimit = maxRows.coerceIn(1, 10_000)
         val byNumber = contacts.flatMap { item ->
             item.allNumbers.map { normalizeNumber(it).takeLast(10) to item }
         }.toMap()
-        val recent = mutableListOf<RecentEntry>()
+        val recent = ArrayList<RecentEntry>(pageLimit)
+        var totalCount = 0
         try {
             context.contentResolver.query(
                 CallLog.Calls.CONTENT_URI,
@@ -138,7 +147,9 @@ internal class PhoneRepository(private val context: Context) {
                     CallLog.Calls.TYPE, CallLog.Calls.DATE, CallLog.Calls.DURATION),
                 null, null, "${CallLog.Calls.DATE} DESC"
             )?.use { cursor ->
-                while (cursor.moveToNext() && recent.size < 200) {
+                // Cursor count is the real Android call-log total, not the UI page size.
+                totalCount = cursor.count.coerceAtLeast(0)
+                while (cursor.moveToNext() && recent.size < pageLimit) {
                     val number = cursor.getString(1).orEmpty()
                     val contact = byNumber[normalizeNumber(number).takeLast(10)]
                     val cachedName = cursor.getString(2).orEmpty()
@@ -157,7 +168,7 @@ internal class PhoneRepository(private val context: Context) {
             if (error is kotlinx.coroutines.CancellationException) throw error
             android.util.Log.w("SCall", "Call history provider unavailable", error)
         }
-        recent
+        CallHistoryPage(recent, totalCount)
     }
 
     /**
