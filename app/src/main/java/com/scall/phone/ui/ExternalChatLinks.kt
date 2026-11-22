@@ -15,9 +15,12 @@ internal enum class ExternalChatApp { WHATSAPP, TELEGRAM }
 internal fun chatPhoneDigits(raw: String): String? {
     val value = raw.trim()
     if (value.isBlank()) return null
-    if (value.any { !it.isDigit() && it != '+' && it != ' ' && it != '-' &&
+    if (value.any { it !in '0'..'9' && it != '+' && it != ' ' && it != '-' &&
             it != '(' && it != ')' }) return null
-    val digits = value.filter(Char::isDigit)
+    // A plus belongs exclusively at the beginning; embedded '+' can direct a
+    // link to a different phone number if it is silently stripped.
+    if (value.indexOf('+') > 0 || value.count { it == '+' } > 1) return null
+    val digits = value.filter { it in '0'..'9' }
     if (digits.length == 10 && !value.startsWith("+")) return "91$digits"
     if (digits.length == 11 && digits.startsWith("0") && !value.startsWith("+"))
         return "91" + digits.drop(1)
