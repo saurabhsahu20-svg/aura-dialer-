@@ -44,13 +44,17 @@ jobs:
           name: S-call-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
-      - name: Publish S Caller v1.9.21 GitHub prerelease
+      - name: Publish version-specific preview after successful build
         if: success() && github.ref == 'refs/heads/main' && github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          cp app/build/outputs/apk/debug/app-debug.apk S-Caller-v1.9.21-History-Expandable-Actions.apk
-          sha256sum S-Caller-v1.9.21-History-Expandable-Actions.apk > SHA256SUMS.txt
-          gh release view v1.9.21-call-history-actions-preview >/dev/null 2>&1 || gh release create v1.9.21-call-history-actions-preview --target "$GITHUB_SHA" --title "S Caller v1.9.21 - Accurate Call History & Collapsible Actions" --notes "Preview debug-signed Android build. Remove call-log 200-row cap, collapse call history WhatsApp, Telegram, Edit, Delete and Details behind tap; maintain call-hangup improvements. CI unit tests run; real cellular hangup must still be tested on-device. Signing may differ from previous preview APKs; back up app data before uninstalling an earlier build." --prerelease
-          gh release upload v1.9.21-call-history-actions-preview S-Caller-v1.9.21-History-Expandable-Actions.apk SHA256SUMS.txt --clobber
+          VERSION="$(sed -nE 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' app/build.gradle.kts | head -n 1)"
+          test -n "$VERSION"
+          TAG="v${VERSION}-preview"
+          APK="S-Caller-v${VERSION}-Preview.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$APK"
+          sha256sum "$APK" > SHA256SUMS.txt
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --target "$GITHUB_SHA" --title "S Caller v${VERSION} - Tested Preview" --notes "CI-built Android debug APK. Contacts search optimizations and accuracy fixes. On-device call, Bluetooth, SIM and signing/update compatibility testing remains necessary." --prerelease
+          gh release upload "$TAG" "$APK" SHA256SUMS.txt --clobber
