@@ -23,3 +23,12 @@ internal fun externalChatLink(raw: String, app: ExternalChatApp): String? {
         ExternalChatApp.TELEGRAM -> "https://t.me/+$digits"
     }
 }
+
+/** Native deep link first; use the public web fallback only when needed. */
+internal fun externalChatDirectUri(raw: String, app: ExternalChatApp): String? {
+    val digits = chatPhoneDigits(raw) ?: return null
+    return when (app) {
+        ExternalChatApp.WHATSAPP -> "whatsapp://send?phone=$digits"
+        ExternalChatApp.TELEGRAM -> "tg://resolve?phone=$digits"
+    }
+}

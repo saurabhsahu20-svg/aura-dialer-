@@ -334,12 +334,11 @@ internal fun SCallApp(
             Toast.makeText(context, "Enter a valid phone number with country code.", Toast.LENGTH_LONG).show()
             return
         }
-        val digits = chatPhoneDigits(number) ?: return
         val packages = when (app) {
             ExternalChatApp.WHATSAPP -> listOf("com.whatsapp", "com.whatsapp.w4b")
             ExternalChatApp.TELEGRAM -> listOf("org.telegram.messenger", "org.thunderdog.challegram")
         }
-        val appUri = if (app == ExternalChatApp.TELEGRAM) "tg://resolve?phone=$digits" else url
+        val appUri = externalChatDirectUri(number, app) ?: return
         val intents = packages.map { pkg ->
             Intent(Intent.ACTION_VIEW, Uri.parse(appUri)).apply { setPackage(pkg) }
         } + Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
@@ -686,6 +685,7 @@ internal fun SCallApp(
                         photo = photos.photoFor(activeContact!!.number) ?: activeContact!!.photo,
                         onCall = { requestCall(activeContact!!.number) },
                         onMessage = { requestMessage(activeContact!!.number) },
+                        onChat = ::openExternalChat,
                         onEditPhoto = { activeContact?.let(::openPhotoEditor) }
                     )
                     page == "Settings" -> SettingsScreen(
@@ -742,6 +742,7 @@ internal fun SCallApp(
                             contacts = contacts,
                             onCall = { requestCall(dialNumber) },
                             onMessage = { requestMessage(dialNumber) },
+                            onChat = ::openExternalChat,
                             onSimSettings = { navigateTo("SIM Manager") },
                             onBack = { navigateBack() },
                             simLabel = label
@@ -814,6 +815,7 @@ internal fun SCallApp(
                                 swipesEnabled = enableSwipes,
                                 onCall = ::requestCall,
                                 onMessage = ::requestMessage,
+                                onChat = ::openExternalChat,
                                 onContact = { activeContact = it },
                                 onPhoto = ::openPhotoEditor
                             )
@@ -823,6 +825,7 @@ internal fun SCallApp(
                                 swipesEnabled = enableSwipes,
                                 onCall = ::requestCall,
                                 onMessage = ::requestMessage,
+                                onChat = ::openExternalChat,
                                 onContact = { activeContact = it },
                                 onPhoto = ::openPhotoEditor,
                                 emptyTitle = "No favorites yet"
@@ -854,6 +857,7 @@ internal fun SCallApp(
                                 onDeleteOne = { pendingHistoryDeletion = setOf(it.id) },
                                 onCall = ::requestCall,
                                 onMessage = ::requestMessage,
+                                onChat = ::openExternalChat,
                                 onDetails = { entry ->
                                     activeContact = contacts.firstOrNull { it.number == entry.number }
                                         ?: ContactEntry(0, entry.name, entry.number, entry.photo, false)
@@ -971,6 +975,7 @@ internal fun EmptyState(title: String, subtitle: String) {
 private fun ContactsScreen(
     contacts: List<ContactEntry>, photos: PhotoStore, loading: Boolean,
     swipesEnabled: Boolean, onCall: (String) -> Unit, onMessage: (String) -> Unit,
+    onChat: (String, ExternalChatApp) -> Unit,
     onContact: (ContactEntry) -> Unit,
     onPhoto: (ContactEntry) -> Unit,
     emptyTitle: String = "No contacts found"
@@ -992,6 +997,8 @@ private fun ContactsScreen(
                 onClick = { onContact(contact) },
                 onPhoto = { onPhoto(contact) }
             )
+            DirectChatActions(number = contact.number, onLaunch = onChat,
+                modifier = Modifier.padding(start = 79.dp, end = 18.dp, bottom = 9.dp))
         }
     }
 }
@@ -1013,6 +1020,7 @@ private fun RecentsScreen(
     onDeleteOne: (RecentEntry) -> Unit,
     onCall: (String) -> Unit,
     onMessage: (String) -> Unit,
+    onChat: (String, ExternalChatApp) -> Unit,
     onDetails: (RecentEntry) -> Unit
 ) {
     var filter by remember { mutableStateOf<CallDirection?>(null) }
@@ -1151,6 +1159,10 @@ private fun RecentsScreen(
                         if (selectionMode) onToggleSelected(item) else onDetails(item)
                     }
                 )
+                if (!selectionMode) {
+                    DirectChatActions(number = item.number, onLaunch = onChat,
+                        modifier = Modifier.padding(start = 22.dp, end = 18.dp, bottom = 3.dp))
+                }
                 Row(
                     Modifier.fillMaxWidth().padding(start = 22.dp, end = 18.dp, bottom = 7.dp),
                     horizontalArrangement = Arrangement.End,
@@ -1203,7 +1215,9 @@ private fun SectionHeading(title: String, trailing: String) {
 @Composable
 private fun ContactDetailsScreen(
     contact: ContactEntry, photo: String?, onCall: () -> Unit,
-    onMessage: () -> Unit, onEditPhoto: () -> Unit
+    onMessage: () -> Unit,
+    onChat: (String, ExternalChatApp) -> Unit,
+    onEditPhoto: () -> Unit
 ) {
     Column(
         Modifier.fillMaxSize().padding(horizontal = 22.dp),
@@ -1228,7 +1242,9 @@ private fun ContactDetailsScreen(
                 Icon(Icons.Default.PhotoCamera, "Caller photo", modifier = Modifier.size(27.dp))
             }
         }
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(16.dp))
+        DirectChatActions(number = contact.number, onLaunch = onChat)
+        Spacer(Modifier.height(20.dp))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         ListItem(
             headlineContent = { Text("Full-screen caller photo") },

@@ -421,6 +421,7 @@ internal fun KeypadScreen(
     contacts: List<ContactEntry>,
     onCall: () -> Unit,
     onMessage: () -> Unit,
+    onChat: (String, ExternalChatApp) -> Unit,
     onSimSettings: () -> Unit,
     onBack: () -> Unit,
     simLabel: String
@@ -547,6 +548,8 @@ internal fun KeypadScreen(
                 maxLines = 2
             )
         }
+        DirectChatActions(number = value, onLaunch = onChat,
+            modifier = Modifier.padding(vertical = 4.dp))
         BoxWithConstraints(
             modifier = Modifier.weight(1f).fillMaxWidth()
         ) {
