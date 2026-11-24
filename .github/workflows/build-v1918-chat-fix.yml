@@ -1,8 +1,7 @@
 name: Build S Caller v1.9.18 APK
+# Older release retained for manual verification; never run on new version pushes.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
 permissions:
   contents: write
 jobs:
