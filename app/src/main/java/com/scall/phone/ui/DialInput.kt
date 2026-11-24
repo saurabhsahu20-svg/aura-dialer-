@@ -26,3 +26,13 @@ internal fun adaptiveDialRowHeight(availableHeightDp: Float, suggestionCount: In
     val suggestionSpace = if (matches == 0) 0f else 30f + matches * 54f
     return ((availableHeightDp - suggestionSpace - 12f) / 4f).coerceIn(72f, 136f)
 }
+
+/**
+ * A dial pad's number-key height must never depend on search results.
+ * Contact suggestions are shown on demand in a dialog, not inserted
+ * above the keys, so keys cannot jump under the user's finger.
+ */
+internal fun stableDialRowHeight(availableHeightDp: Float): Float {
+    if (!availableHeightDp.isFinite() || availableHeightDp <= 0f) return 52f
+    return (availableHeightDp / 4f).coerceIn(52f, 90f)
+}
