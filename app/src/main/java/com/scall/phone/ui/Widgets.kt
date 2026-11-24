@@ -186,7 +186,9 @@ internal fun SwipeContactRow(
     onCall: () -> Unit,
     onMessage: () -> Unit,
     onClick: () -> Unit,
-    onPhoto: (() -> Unit)? = null
+    onPhoto: (() -> Unit)? = null,
+    showMoreIndicator: Boolean = false,
+    expanded: Boolean = false
 ) {
     var offset by remember(name, number) { mutableFloatStateOf(0f) }
     var dragging by remember(name, number) { mutableStateOf(false) }
@@ -325,6 +327,14 @@ internal fun SwipeContactRow(
             }
             IconButton(onClick = onCall, modifier = Modifier.size(46.dp)) {
                 Icon(Icons.Default.Call, "Call $name", tint = primary, modifier = Modifier.size(20.dp))
+            }
+            if (showMoreIndicator) {
+                Icon(
+                    if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (expanded) "Hide actions for $name" else "Show actions for $name",
+                    modifier = Modifier.size(26.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

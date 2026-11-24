@@ -9,6 +9,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -1024,12 +1025,18 @@ private fun RecentsScreen(
     onDetails: (RecentEntry) -> Unit
 ) {
     var filter by remember { mutableStateOf<CallDirection?>(null) }
+    // Only one expanded row at a time: constant-size state even for long call logs.
+    var expandedCallId by rememberSaveable { mutableStateOf<Long?>(null) }
     val filteredCalls = remember(calls, filter) {
         calls.filter { filter == null || classifyCallDirection(it.type) == filter }
     }
-    val incomingCount = calls.count { classifyCallDirection(it.type) == CallDirection.INCOMING }
-    val outgoingCount = calls.count { classifyCallDirection(it.type) == CallDirection.OUTGOING }
-    val missedCount = calls.count { classifyCallDirection(it.type) == CallDirection.MISSED }
+    val (incomingCount, outgoingCount, missedCount) = remember(calls) {
+        Triple(
+            calls.count { classifyCallDirection(it.type) == CallDirection.INCOMING },
+            calls.count { classifyCallDirection(it.type) == CallDirection.OUTGOING },
+            calls.count { classifyCallDirection(it.type) == CallDirection.MISSED }
+        )
+    }
 
     LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
@@ -1134,6 +1141,7 @@ private fun RecentsScreen(
             }
         }
         items(filteredCalls, key = { it.id }) { item ->
+            val expanded = !selectionMode && expandedCallId == item.id
             val direction = classifyCallDirection(item.type)
             val time = remember(item.timestamp) {
                 java.text.SimpleDateFormat("dd MMM, h:mm a", java.util.Locale.getDefault())
@@ -1155,39 +1163,53 @@ private fun RecentsScreen(
                     swipesEnabled = swipesEnabled && !selectionMode,
                     onCall = { onCall(item.number) },
                     onMessage = { onMessage(item.number) },
+                    showMoreIndicator = !selectionMode,
+                    expanded = expanded,
                     onClick = {
-                        if (selectionMode) onToggleSelected(item) else onDetails(item)
+                        if (selectionMode) onToggleSelected(item)
+                        else expandedCallId = if (expanded) null else item.id
                     }
                 )
-                if (!selectionMode) {
-                    DirectChatActions(number = item.number, onLaunch = onChat,
-                        modifier = Modifier.padding(start = 22.dp, end = 18.dp, bottom = 3.dp))
+                if (selectionMode) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(start = 22.dp, end = 18.dp, bottom = 7.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(checked = item.id in selectedIds,
+                            onCheckedChange = { onToggleSelected(item) })
+                        Text("Select", style = MaterialTheme.typography.labelSmall)
+                    }
                 }
-                Row(
-                    Modifier.fillMaxWidth().padding(start = 22.dp, end = 18.dp, bottom = 7.dp),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (selectionMode) {
-                        Checkbox(
-                            checked = item.id in selectedIds,
-                            onCheckedChange = { onToggleSelected(item) }
+                AnimatedVisibility(visible = expanded) {
+                    Column(Modifier.fillMaxWidth().padding(bottom = 5.dp)) {
+                        DirectChatActions(
+                            number = item.number,
+                            onLaunch = onChat,
+                            modifier = Modifier.padding(start = 22.dp, end = 18.dp, bottom = 4.dp)
                         )
-                        Text("Select", style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.weight(1f))
-                    } else {
-                        Spacer(Modifier.weight(1f))
-                    }
-                    TextButton(onClick = { onEdit(item) }) {
-                        Icon(Icons.Default.Edit, null, Modifier.size(17.dp))
-                        Spacer(Modifier.width(3.dp))
-                        Text("Edit")
-                    }
-                    TextButton(onClick = { onDeleteOne(item) }) {
-                        Icon(Icons.Default.DeleteOutline, null, Modifier.size(17.dp),
-                            tint = MaterialTheme.colorScheme.error)
-                        Spacer(Modifier.width(3.dp))
-                        Text("Delete", color = MaterialTheme.colorScheme.error)
+                        Row(
+                            Modifier.fillMaxWidth().padding(start = 22.dp, end = 18.dp, bottom = 3.dp),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(onClick = { onDetails(item) }) {
+                                Icon(Icons.Default.Info, "Contact details", Modifier.size(17.dp))
+                                Spacer(Modifier.width(3.dp))
+                                Text("Details")
+                            }
+                            TextButton(onClick = { onEdit(item) }) {
+                                Icon(Icons.Default.Edit, "Edit this call", Modifier.size(17.dp))
+                                Spacer(Modifier.width(3.dp))
+                                Text("Edit")
+                            }
+                            TextButton(onClick = { onDeleteOne(item) }) {
+                                Icon(Icons.Default.DeleteOutline, "Delete this call", Modifier.size(17.dp),
+                                    tint = MaterialTheme.colorScheme.error)
+                                Spacer(Modifier.width(3.dp))
+                                Text("Delete", color = MaterialTheme.colorScheme.error)
+                            }
+                        }
                     }
                 }
                 HorizontalDivider(

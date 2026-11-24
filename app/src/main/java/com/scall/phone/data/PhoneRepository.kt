@@ -104,7 +104,7 @@ internal class PhoneRepository(private val context: Context) {
                     CallLog.Calls.TYPE, CallLog.Calls.DATE, CallLog.Calls.DURATION),
                 null, null, "${CallLog.Calls.DATE} DESC"
             )?.use { cursor ->
-                while (cursor.moveToNext() && recent.size < 200) {
+                while (cursor.moveToNext()) {
                     val number = cursor.getString(1).orEmpty()
                     val contact = byNumber[normalizeNumber(number).takeLast(10)]
                     val cachedName = cursor.getString(2).orEmpty()
@@ -132,23 +132,28 @@ internal class PhoneRepository(private val context: Context) {
      * Returns -1 if blocked; never claim success when the system rejects the operation.
      */
     suspend fun deleteRecentCalls(ids: Set<Long>): Int = withContext(Dispatchers.IO) {
-        val valid = ids.filter { it > 0 }.distinct().take(200)
+        val valid = ids.filter { it > 0 }.distinct()
         if (valid.isEmpty()) return@withContext 0
         if (!isDefaultDialer() || !hasLogsPermission() || !hasWriteLogsPermission()) {
             return@withContext -1
         }
-        val where = "${CallLog.Calls._ID} IN (${valid.joinToString(",") { "?" }})"
-        try {
-            context.contentResolver.delete(
-                CallLog.Calls.CONTENT_URI,
-                where,
-                valid.map { it.toString() }.toTypedArray()
-            )
-        } catch (_: SecurityException) {
-            -1
-        } catch (_: Exception) {
-            -1
+        var deleted = 0
+        // Avoid Android SQLite's bind-variable limits; never silently drop selections.
+        for (batch in valid.chunked(100)) {
+            val where = "${CallLog.Calls._ID} IN (${batch.joinToString(",") { "?" }})"
+            val affected = try {
+                context.contentResolver.delete(
+                    CallLog.Calls.CONTENT_URI, where,
+                    batch.map { it.toString() }.toTypedArray()
+                )
+            } catch (error: Exception) {
+                android.util.Log.w("SCall", "Unable to delete selected call history batch", error)
+                -1
+            }
+            if (affected < 0) return@withContext if (deleted == 0) -1 else deleted
+            deleted += affected
         }
+        deleted
     }
 
     suspend fun findContact(number: String): ContactEntry? = withContext(Dispatchers.IO) {
