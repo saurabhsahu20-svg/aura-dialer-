@@ -11,6 +11,6 @@ internal fun matchesContactSearch(name: String, number: String, search: String):
     if (name.contains(query, ignoreCase = true) ||
         number.contains(query, ignoreCase = true)) return true
     val digits = query.filter(Char::isDigit)
-    if (digits.isEmpty()) return false
+    if (digits.isEmpty() || query.any(Char::isLetter)) return false
     return number.filter(Char::isDigit).contains(digits)
 }
