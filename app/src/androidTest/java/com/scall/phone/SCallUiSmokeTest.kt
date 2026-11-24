@@ -54,12 +54,16 @@ class SCallUiSmokeTest {
     fun keypadDoesNotLeaveAnOversizedGapUnderTheDigits() {
         rule.onNodeWithContentDescription("Keypad", useUnmergedTree = true).performClick()
         rule.waitForIdle()
-        val lastKeyBottom = rule.onNodeWithContentDescription("#")
-            .fetchSemanticsNode().boundsInRoot.bottom
-        val callTop = rule.onNodeWithText("Call").fetchSemanticsNode().boundsInRoot.top
-        val gapDp = (callTop - lastKeyBottom) / rule.activity.resources.displayMetrics.density
+        val first = rule.onNodeWithContentDescription("1").fetchSemanticsNode().boundsInRoot
+        val second = rule.onNodeWithContentDescription("4, GHI").fetchSemanticsNode().boundsInRoot
+        val third = rule.onNodeWithContentDescription("7, PQRS").fetchSemanticsNode().boundsInRoot
+        val last = rule.onNodeWithContentDescription("#").fetchSemanticsNode().boundsInRoot
+        val call = rule.onNodeWithText("Call").fetchSemanticsNode().boundsInRoot
+        val density = rule.activity.resources.displayMetrics.density
+        val gapDp = (call.top - last.bottom) / density
+        val metrics = "first=$first second=$second third=$third last=$last call=$call density=$density"
         org.junit.Assert.assertTrue(
-            "Too much unused space below keypad: ${gapDp}dp",
+            "Too much unused space below keypad: ${gapDp}dp; $metrics",
             gapDp >= 0f && gapDp < 100f
         )
     }
