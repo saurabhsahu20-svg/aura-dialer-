@@ -44,13 +44,13 @@ jobs:
           name: S-call-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
-      - name: Publish S Caller v1.9.23 GitHub prerelease
+      - name: Publish S Caller v1.9.24 GitHub prerelease
         if: success() && github.ref == 'refs/heads/main' && github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          cp app/build/outputs/apk/debug/app-debug.apk S-Caller-v1.9.23-Keypad-Spacing-Verified-Fix.apk
-          sha256sum S-Caller-v1.9.23-Keypad-Spacing-Verified-Fix.apk > SHA256SUMS.txt
-          gh release view v1.9.23-keypad-spacing-verified-preview >/dev/null 2>&1 || gh release create v1.9.23-keypad-spacing-verified-preview --target "$GITHUB_SHA" --title "S Caller v1.9.23 - Keypad Spacing and Stability Fix" --notes "Preview debug-signed Android build. Preserve all existing S Caller features. Fix the keypad viewport row-gap sizing verified by Android emulator tests, plus contact accuracy and search optimizations. CI unit tests run; real cellular hangup must still be tested on-device. Signing may differ from previous preview APKs; back up app data before uninstalling an earlier build." --prerelease
-          gh release upload v1.9.23-keypad-spacing-verified-preview S-Caller-v1.9.23-Keypad-Spacing-Verified-Fix.apk SHA256SUMS.txt --clobber
+          cp app/build/outputs/apk/debug/app-debug.apk S-Caller-v1.9.24-Keypad-Viewport-Responsive-Fix.apk
+          sha256sum S-Caller-v1.9.24-Keypad-Viewport-Responsive-Fix.apk > SHA256SUMS.txt
+          gh release view v1.9.24-keypad-viewport-responsive-preview >/dev/null 2>&1 || gh release create v1.9.24-keypad-viewport-responsive-preview --target "$GITHUB_SHA" --title "S Caller v1.9.24 - Keypad Viewport and Stability Fix" --notes "Preview debug-signed Android build. Preserve all existing S Caller features. Fix parent Column's unbounded keypad height and viewport row-gap sizing; verify using emulator tests, plus contact accuracy and search optimizations. CI unit tests run; real cellular hangup must still be tested on-device. Signing may differ from previous preview APKs; back up app data before uninstalling an earlier build." --prerelease
+          gh release upload v1.9.24-keypad-viewport-responsive-preview S-Caller-v1.9.24-Keypad-Viewport-Responsive-Fix.apk SHA256SUMS.txt --clobber

@@ -743,17 +743,22 @@ internal fun SCallApp(
                                 }.getOrNull() ?: "Line unavailable"
                             }
                         }
-                        KeypadScreen(
-                            value = dialNumber,
-                            onValueChange = { dialNumber = it },
-                            contacts = contacts,
-                            onCall = { requestCall(dialNumber) },
-                            onMessage = { requestMessage(dialNumber) },
-                            onChat = ::openExternalChat,
-                            onSimSettings = { navigateTo("SIM Manager") },
-                            onBack = { navigateBack() },
-                            simLabel = label
-                        )
+                        // A Column measures an unweighted child with an unbounded
+                        // height. Give KeypadScreen a bounded full-height slot so
+                        // its weighted digit area and measured row gaps can work.
+                        Box(Modifier.fillMaxWidth().weight(1f)) {
+                            KeypadScreen(
+                                value = dialNumber,
+                                onValueChange = { dialNumber = it },
+                                contacts = contacts,
+                                onCall = { requestCall(dialNumber) },
+                                onMessage = { requestMessage(dialNumber) },
+                                onChat = ::openExternalChat,
+                                onSimSettings = { navigateTo("SIM Manager") },
+                                onBack = { navigateBack() },
+                                simLabel = label
+                            )
+                        }
                     }
                     else -> {
                         if (currentCall != null) {
