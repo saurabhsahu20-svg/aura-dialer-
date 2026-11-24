@@ -44,13 +44,13 @@ jobs:
           name: S-call-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
-      - name: Publish S Caller v1.9.18 GitHub prerelease
+      - name: Publish S Caller v1.9.19 GitHub prerelease
         if: success() && github.ref == 'refs/heads/main' && github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          cp app/build/outputs/apk/debug/app-debug.apk S-Caller-v1.9.18-WhatsApp-Telegram-Preview.apk
-          sha256sum S-Caller-v1.9.18-WhatsApp-Telegram-Preview.apk > SHA256SUMS.txt
-          gh release view v1.9.18-direct-chat-preview >/dev/null 2>&1 || gh release create v1.9.18-direct-chat-preview --target "$GITHUB_SHA" --title "S Caller v1.9.18 - Direct Chat Preview" --notes "Preview debug-signed Android build. Adds WhatsApp, Telegram and SMS chooser from S Caller. Tested by CI; on-device validation remains necessary. Signing may differ from previous preview APKs; back up app data before uninstalling an earlier build." --prerelease
-          gh release upload v1.9.18-direct-chat-preview S-Caller-v1.9.18-WhatsApp-Telegram-Preview.apk SHA256SUMS.txt --clobber
+          cp app/build/outputs/apk/debug/app-debug.apk S-Caller-v1.9.19-Hangup-Response-Preview.apk
+          sha256sum S-Caller-v1.9.19-Hangup-Response-Preview.apk > SHA256SUMS.txt
+          gh release view v1.9.19-hangup-response-preview >/dev/null 2>&1 || gh release create v1.9.19-hangup-response-preview --target "$GITHUB_SHA" --title "S Caller v1.9.19 - Hangup Response Fix" --notes "Preview debug-signed Android build. Retains WhatsApp, Telegram and SMS chat shortcuts. Improves end-call button responsiveness with guarded retries. CI unit tests run; real cellular hangup must still be tested on-device. Signing may differ from previous preview APKs; back up app data before uninstalling an earlier build." --prerelease
+          gh release upload v1.9.19-hangup-response-preview S-Caller-v1.9.19-Hangup-Response-Preview.apk SHA256SUMS.txt --clobber

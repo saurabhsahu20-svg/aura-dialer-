@@ -41,6 +41,7 @@ import com.scall.phone.data.PhoneRepository
 import com.scall.phone.data.PhotoStore
 import com.scall.phone.data.CallerPhotoStyle
 import com.scall.phone.telecom.CallBridge
+import com.scall.phone.telecom.EndCallProgress
 import com.scall.phone.telecom.CallSnapshot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -160,6 +161,7 @@ internal fun CallScreen(
     }
     val name = resolvedName.ifBlank { call?.displayName?.ifBlank { number.ifBlank { "Unknown caller" } } ?: "S call" }
     val incoming = call?.state == Call.STATE_RINGING
+    val endProgress by CallBridge.endProgress.collectAsState()
     var keypadOpen by remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize().background(BackBlue)) {
@@ -257,9 +259,20 @@ internal fun CallScreen(
                     Spacer(Modifier.height(24.dp))
                     FilledIconButton(
                         onClick = CallBridge::disconnect,
+                        enabled = true,
                         colors = IconButtonDefaults.filledIconButtonColors(containerColor = Decline),
-                        modifier = Modifier.size(72.dp)
-                    ) { Icon(Icons.Default.CallEnd, "End call", Modifier.size(30.dp), tint = Color.White) }
+                        modifier = Modifier.size(76.dp)
+                    ) { Icon(Icons.Default.CallEnd, "End call", Modifier.size(32.dp), tint = Color.White) }
+                    if (endProgress != EndCallProgress.IDLE) {
+                        Spacer(Modifier.height(7.dp))
+                        Text(
+                            if (endProgress == EndCallProgress.ENDING) "Ending call… Tap again if needed."
+                            else "Call still active — tap the red button to retry.",
+                            color = Color.White.copy(alpha = 0.87f),
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                     if (keypadOpen) TextButton(onClick = { keypadOpen = false }) {
                         Text("Close keypad", color = Color.White)
                     } else Spacer(Modifier.height(12.dp))

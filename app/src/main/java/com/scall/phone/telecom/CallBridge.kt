@@ -1,6 +1,9 @@
 package com.scall.phone.telecom
 
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.os.OutcomeReceiver
 import android.telecom.Call
 import android.telecom.CallEndpoint
@@ -10,6 +13,8 @@ import android.telecom.InCallService
 import android.telecom.VideoProfile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+
+internal enum class EndCallProgress { IDLE, ENDING, STILL_ACTIVE }
 
 internal data class CallSnapshot(
     val number: String,
@@ -41,6 +46,12 @@ internal object CallBridge {
     private val callbacks = linkedMapOf<Call, Call.Callback>()
     private val mutable = MutableStateFlow<CallSnapshot?>(null)
     val current = mutable.asStateFlow()
+    private val endProgressMutable = MutableStateFlow(EndCallProgress.IDLE)
+    val endProgress = endProgressMutable.asStateFlow()
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var endingTarget: Call? = null
+    private var endRequestSequence = 0
+    private var endingSinceMillis = 0L
 
     private fun safelyUnregister(call: Call, callback: Call.Callback) {
         try {
@@ -67,6 +78,7 @@ internal object CallBridge {
                 safelyUnregister(call, callback)
             }
             callbacks.clear()
+            clearEnding()
         }
         service = inCallService
         latestEndpoints = emptyList()
@@ -88,6 +100,7 @@ internal object CallBridge {
             safelyUnregister(call, callback)
         }
         callbacks.clear()
+        clearEnding()
         mutable.value = null
     }
 
@@ -114,7 +127,13 @@ internal object CallBridge {
 
     fun addCall(call: Call) {
         val callback = object : Call.Callback() {
-            override fun onStateChanged(call: Call, state: Int) = refresh()
+            override fun onStateChanged(call: Call, state: Int) {
+                if (call === endingTarget &&
+                    (state == Call.STATE_DISCONNECTING || state == Call.STATE_DISCONNECTED)) {
+                    clearEnding()
+                }
+                refresh()
+            }
             override fun onDetailsChanged(call: Call, details: Call.Details) = refresh()
             override fun onCallDestroyed(call: Call) = removeCall(call)
             override fun onChildrenChanged(call: Call, children: MutableList<Call>) = refresh()
@@ -132,6 +151,7 @@ internal object CallBridge {
 
     fun removeCall(call: Call) {
         callbacks.remove(call)?.let { callback -> safelyUnregister(call, callback) }
+        if (call === endingTarget) clearEnding()
         refresh()
     }
 
@@ -241,7 +261,81 @@ internal object CallBridge {
         primaryCall()?.takeIf { it.state == Call.STATE_RINGING }?.reject(false, null)
     }
 
-    fun disconnect() = safeCallAction("disconnect") { primaryCall()?.disconnect() }
+    /**
+     * End the requested call immediately. Retry only while Android Telecom
+     * reports the exact same Call as live. Never end a later replacement call.
+     */
+    fun disconnect() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { disconnect() }
+            return
+        }
+        val liveCalls = (runCatching { service?.calls?.toList().orEmpty() }
+            .getOrDefault(emptyList()) + callbacks.keys)
+            .distinct()
+            .filter { it.state != Call.STATE_DISCONNECTED && it.state != Call.STATE_DISCONNECTING }
+        val call = liveCalls.minByOrNull { endCallPriority(it.state) }
+        if (call == null) {
+            refreshFromTelecom()
+            return
+        }
+
+        val now = SystemClock.elapsedRealtime()
+        // Only ignore accidental double taps, rather than locking for seconds.
+        if (endingTarget === call && now - endingSinceMillis < 400L) return
+        endingTarget = call
+        endingSinceMillis = now
+        endProgressMutable.value = EndCallProgress.ENDING
+        val requestId = ++endRequestSequence
+
+        fun stillSameLiveCall(): Boolean {
+            if (requestId != endRequestSequence || endingTarget !== call) return false
+            if (call.state == Call.STATE_DISCONNECTED || call.state == Call.STATE_DISCONNECTING) {
+                clearEnding()
+                return false
+            }
+            val present = runCatching { service?.calls?.contains(call) == true }
+                .getOrDefault(false) || callbacks.containsKey(call)
+            if (!present) clearEnding()
+            return present
+        }
+
+        fun sendEndRequest() {
+            if (!stillSameLiveCall()) return
+            try {
+                call.disconnect()
+            } catch (error: RuntimeException) {
+                android.util.Log.w("SCallBridge", "End-call request failed", error)
+                endProgressMutable.value = EndCallProgress.STILL_ACTIVE
+            }
+        }
+
+        sendEndRequest()
+        mainHandler.postDelayed({
+            if (stillSameLiveCall()) {
+                sendEndRequest()
+                refresh()
+            }
+        }, 450L)
+        mainHandler.postDelayed({
+            if (stillSameLiveCall()) {
+                sendEndRequest()
+                refresh()
+            }
+        }, 1200L)
+        mainHandler.postDelayed({
+            if (stillSameLiveCall()) {
+                endProgressMutable.value = EndCallProgress.STILL_ACTIVE
+                refresh()
+            }
+        }, 2200L)
+    }
+
+    private fun clearEnding() {
+        endRequestSequence++
+        endingTarget = null
+        endProgressMutable.value = EndCallProgress.IDLE
+    }
 
     fun holdOrUnhold() = safeCallAction("hold") {
         primaryCall()?.let { call ->
