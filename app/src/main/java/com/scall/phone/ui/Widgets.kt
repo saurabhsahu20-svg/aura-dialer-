@@ -439,12 +439,57 @@ internal fun KeypadScreen(
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val hasNumber = value.any { it.isDigit() }
-    val matches = remember(value, contacts) {
+    // Searching potentially thousands of contacts on every UI recomposition
+    // used to delay typing. Cancel obsolete searches and run them off UI.
+    var matches by remember { mutableStateOf<List<ContactEntry>>(emptyList()) }
+    var showMatchingContacts by remember { mutableStateOf(false) }
+    LaunchedEffect(value, contacts) {
         val digits = value.filter(Char::isDigit)
-        if (digits.length < 2) emptyList() else contacts.asSequence().filter {
-            it.number.filter(Char::isDigit).contains(digits) ||
-                t9(it.name).startsWith(digits)
-        }.take(3).toList()
+        if (digits.length < 2) {
+            matches = emptyList()
+        } else {
+            kotlinx.coroutines.delay(60)
+            matches = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                contacts.asSequence().filter {
+                    it.number.filter(Char::isDigit).contains(digits) ||
+                        t9(it.name).startsWith(digits)
+                }.take(3).toList()
+            }
+        }
+    }
+    // Keep suggestions out of the dial-pad's layout. Contacts can only be
+    // selected after explicitly opening this dialog, never by a shifting key.
+    if (showMatchingContacts && matches.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { showMatchingContacts = false },
+            title = { Text("Matching contacts") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    matches.forEach { item ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                showMatchingContacts = false
+                                onValueChange(cleanDialNumber(item.number))
+                            }.padding(horizontal = 6.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            ContactAvatar(item.name, item.photo, 36.dp)
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(item.name, maxLines = 1,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold)
+                                Text(item.number, maxLines = 1,
+                                    style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showMatchingContacts = false }) { Text("Close") }
+            }
+        )
     }
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 17.dp),
@@ -477,8 +522,18 @@ internal fun KeypadScreen(
         ) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp)) {
                 Text(
-                    if (value.isBlank()) "Enter a number" else "Phone number",
-                    modifier = Modifier.fillMaxWidth(),
+                    when {
+                        matches.isNotEmpty() -> "Phone number • ${matches.size} contacts (tap to view)"
+                        value.isBlank() -> "Enter a number"
+                        else -> "Phone number"
+                    },
+                    // A single-line label is the same height with or without
+                    // results, so typing never pushes number keys downward.
+                    modifier = Modifier.fillMaxWidth().clickable(
+                        enabled = matches.isNotEmpty(),
+                        onClick = { showMatchingContacts = true }
+                    ),
+                    maxLines = 1,
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.labelMedium
@@ -563,60 +618,21 @@ internal fun KeypadScreen(
         BoxWithConstraints(
             modifier = Modifier.weight(1f).fillMaxWidth()
         ) {
-            // Use the available space instead of the old fixed 75dp keypad rows.
-            // On compact screens, retain 72dp touch targets and scroll if needed.
-            val rowHeight = adaptiveDialRowHeight(maxHeight.value, matches.size).dp
-            // Compact screens cannot fit four 72dp rows below contact actions.
-            // Always provide scrolling when the viewport is too short, even if
-            // there are no matching contacts. Otherwise the # and 0 keys get
-            // clipped and become unclickable under the bottom Call button.
-            val keypadMustScroll = matches.isNotEmpty() || maxHeight < rowHeight * 4
+            // Reserve a fixed keypad region independent of search results.
+            // All digits remain in the same place while the number changes.
+            val rowHeight = stableDialRowHeight(maxHeight.value).dp
+            val keypadMustScroll = maxHeight < rowHeight * 4
             Column(
                 modifier = if (keypadMustScroll)
                     Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
                 else Modifier.fillMaxSize(),
                 verticalArrangement = if (keypadMustScroll) Arrangement.Top
-                    else Arrangement.SpaceBetween
+                    else Arrangement.SpaceEvenly
             ) {
-                if (matches.isNotEmpty()) {
-                Text(
-                    "Matching contacts",
-                    modifier = Modifier.padding(start = 9.dp, bottom = 6.dp, top = 6.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                matches.forEach { item ->
-                    Surface(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 5.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        shape = RoundedCornerShape(15.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().clickable {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                onValueChange(cleanDialNumber(item.number))
-                            }.padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            ContactAvatar(item.name, item.photo, 30.dp)
-                            Spacer(Modifier.width(9.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(item.name, style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold, maxLines = 1)
-                                Text(item.number, style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                            }
-                            Icon(Icons.Default.ChevronRight, null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-            }
-                if (matches.isNotEmpty()) Spacer(Modifier.height(7.dp))
                 for (row in 0 until 4) {
                     Row(
                         modifier = Modifier.fillMaxWidth().height(rowHeight)
-                            .padding(vertical = 5.dp),
+                            .padding(vertical = 2.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                     for (col in 0 until 3) {
