@@ -8,16 +8,53 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import android.os.Build
 import android.view.WindowManager
+import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.scall.phone.ui.CallScreen
 import kotlinx.coroutines.delay
 
 class CallUiActivity : ComponentActivity() {
+    private val accidentalTouchGuard by lazy { CallProximityGuard(this) }
+    private var suppressCurrentGesture = false
+
+    // Near-ear gestures must not activate Mute, Speaker, Hold or Hang Up.
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            suppressCurrentGesture = accidentalTouchGuard.shouldSuppressTouch
+        }
+        val blocked = suppressCurrentGesture || accidentalTouchGuard.shouldSuppressTouch
+        if (event.actionMasked == MotionEvent.ACTION_UP ||
+            event.actionMasked == MotionEvent.ACTION_CANCEL) {
+            suppressCurrentGesture = false
+        }
+        return if (blocked) true else super.dispatchTouchEvent(event)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        accidentalTouchGuard.start(CallBridge.current.value)
+    }
+
+    override fun onStop() {
+        // Stop protecting the display immediately when the call UI leaves.
+        accidentalTouchGuard.stop()
+        WindowInsetsControllerCompat(window, window.decorView)
+            .show(WindowInsetsCompat.Type.statusBars())
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        accidentalTouchGuard.stop()
+        super.onDestroy()
+    }
+
     companion object {
         const val ACTION_ANSWER = "com.scall.phone.action.ANSWER_CALL"
 
@@ -48,7 +85,14 @@ class CallUiActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Hides the quick-settings entry while the call UI is foreground.
+        // Android may still show system controls on a deliberate edge swipe.
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.statusBars())
+        }
         CallBridge.refreshFromTelecom()
+        accidentalTouchGuard.update(CallBridge.current.value)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,6 +117,10 @@ class CallUiActivity : ComponentActivity() {
         handleCallAction(intent)
         setContent {
             val call by CallBridge.current.collectAsState()
+            // Protect only real earpiece voice calls, not speaker or Bluetooth.
+            LaunchedEffect(call?.state, call?.audioRouteKind) {
+                accidentalTouchGuard.update(call)
+            }
             var retryAttempt by remember { androidx.compose.runtime.mutableIntStateOf(0) }
             var noCallTimeout by remember { mutableStateOf(false) }
             var hadLiveCall by remember { mutableStateOf(false) }

@@ -30,7 +30,8 @@ internal data class CallSnapshot(
     val accountLabel: String?,
     val audioRouteLabel: String,
     val availableAudioRoutes: List<CallAudioRoute>,
-    val audioRouteError: String?
+    val audioRouteError: String?,
+    val audioRouteKind: String = "other"
 )
 
 /**
@@ -248,7 +249,8 @@ internal object CallBridge {
             accountLabel = accountLabel,
             audioRouteLabel = routeLabel,
             availableAudioRoutes = routes,
-            audioRouteError = routeError
+            audioRouteError = routeError,
+            audioRouteKind = activeKind
         )
     }
 

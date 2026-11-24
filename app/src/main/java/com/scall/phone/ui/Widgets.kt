@@ -566,15 +566,17 @@ internal fun KeypadScreen(
             // Use the available space instead of the old fixed 75dp keypad rows.
             // On compact screens, retain 72dp touch targets and scroll if needed.
             val rowHeight = adaptiveDialRowHeight(maxHeight.value, matches.size).dp
-            // An empty keypad does not need a scroll container: place the
-            // four rows across the actual bounded viewport so the Call button
-            // stays immediately below the last row. Scroll only when suggestions
-            // may make content taller than the available space.
+            // Compact screens cannot fit four 72dp rows below contact actions.
+            // Always provide scrolling when the viewport is too short, even if
+            // there are no matching contacts. Otherwise the # and 0 keys get
+            // clipped and become unclickable under the bottom Call button.
+            val keypadMustScroll = matches.isNotEmpty() || maxHeight < rowHeight * 4
             Column(
-                modifier = if (matches.isEmpty()) Modifier.fillMaxSize()
-                    else Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                verticalArrangement = if (matches.isEmpty()) Arrangement.SpaceBetween
-                    else Arrangement.Top
+                modifier = if (keypadMustScroll)
+                    Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                else Modifier.fillMaxSize(),
+                verticalArrangement = if (keypadMustScroll) Arrangement.Top
+                    else Arrangement.SpaceBetween
             ) {
                 if (matches.isNotEmpty()) {
                 Text(
