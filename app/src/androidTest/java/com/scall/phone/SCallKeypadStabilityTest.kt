@@ -59,4 +59,42 @@ class SCallKeypadStabilityTest {
         rule.onNodeWithText("Close").performClick()
         rule.onNodeWithContentDescription("Dialed phone number 22").assertExists()
     }
+    @Test fun completeSavedNumberShowsNameWithoutMovingKeys() {
+        val digitState = mutableStateOf("")
+        val contacts = listOf(
+            ContactEntry(10L, "Saved Person", "+91 98765 43210", null, false)
+        )
+        rule.setContent {
+            MaterialTheme {
+                KeypadScreen(
+                    value = digitState.value,
+                    onValueChange = { digitState.value = it },
+                    contacts = contacts,
+                    onCall = {}, onMessage = {}, onChat = { _, _ -> },
+                    onSimSettings = {}, onBack = {}, simLabel = "Test SIM"
+                )
+            }
+        }
+        rule.waitForIdle()
+        val before = rule.onNodeWithContentDescription("2, ABC")
+            .fetchSemanticsNode().boundsInRoot
+        rule.runOnIdle { digitState.value = "9876543210" }
+        rule.waitUntil(timeoutMillis = 3000) {
+            rule.onAllNodesWithText("Saved Person • Saved contact")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        rule.onNodeWithText("Saved Person • Saved contact").assertExists()
+        rule.onNodeWithContentDescription("Dialed phone number 9876543210").assertExists()
+        val after = rule.onNodeWithContentDescription("2, ABC")
+            .fetchSemanticsNode().boundsInRoot
+        assertEquals(before.top, after.top, 1f)
+        assertEquals(before.bottom, after.bottom, 1f)
+
+        // A nonmatching extra key must immediately remove the old caller name.
+        rule.onNodeWithContentDescription("1").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Saved Person • Saved contact").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Dialed phone number 98765432101").assertExists()
+    }
+
 }

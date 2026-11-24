@@ -441,19 +441,32 @@ internal fun KeypadScreen(
     val hasNumber = value.any { it.isDigit() }
     // Searching potentially thousands of contacts on every UI recomposition
     // used to delay typing. Cancel obsolete searches and run them off UI.
-    var matches by remember { mutableStateOf<List<ContactEntry>>(emptyList()) }
+    var contactResults by remember {
+        mutableStateOf(DialContactSearchResult("", emptyList(), null))
+    }
+    // An old async result must never show the wrong name while typing.
+    val matches = if (contactResults.query == value) contactResults.suggestions
+        else emptyList()
+    val savedContact = if (contactResults.query == value) contactResults.exactContact
+        else null
     var showMatchingContacts by remember { mutableStateOf(false) }
     LaunchedEffect(value, contacts) {
         val digits = value.filter(Char::isDigit)
         if (digits.length < 2) {
-            matches = emptyList()
+            contactResults = DialContactSearchResult(value, emptyList(), null)
         } else {
             kotlinx.coroutines.delay(60)
-            matches = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                contacts.asSequence().filter {
+            contactResults = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                val exact = exactDialContact(value, contacts)
+                val suggestions = contacts.asSequence().filter {
                     it.number.filter(Char::isDigit).contains(digits) ||
                         t9(it.name).startsWith(digits)
                 }.take(3).toList()
+                // Always include the precise match even if it comes after other
+                // partial matches in the contacts list.
+                val prioritized = if (exact != null) (listOf(exact) + suggestions)
+                    .distinctBy { it.id to it.number }.take(3) else suggestions
+                DialContactSearchResult(value, prioritized, exact)
             }
         }
     }
@@ -523,6 +536,7 @@ internal fun KeypadScreen(
             Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp)) {
                 Text(
                     when {
+                        savedContact != null -> "${savedContact.name} • Saved contact"
                         matches.isNotEmpty() -> "Phone number • ${matches.size} contacts (tap to view)"
                         value.isBlank() -> "Enter a number"
                         else -> "Phone number"
@@ -534,8 +548,11 @@ internal fun KeypadScreen(
                         onClick = { showMatchingContacts = true }
                     ),
                     maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (savedContact != null) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = if (savedContact != null) FontWeight.Bold else FontWeight.Normal,
                     style = MaterialTheme.typography.labelMedium
                 )
                 Row(
