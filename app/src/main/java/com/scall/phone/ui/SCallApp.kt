@@ -115,13 +115,21 @@ internal fun SCallApp(
 
     // Cache search results: otherwise every keypress, call-state update and UI animation
     // walks the entire call log and reads private history notes again.
-    val matchedContacts = remember(contacts, query) {
-        if (query.isBlank()) contacts
-        else contacts.filter { it.name.contains(query, true) || it.number.contains(query) }
-    }
-    val matchedFavorites = remember(contacts, query) {
-        contacts.filter { it.favorite &&
-            (query.isBlank() || it.name.contains(query, true) || it.number.contains(query)) }
+    // Filtering thousands of contacts on the Compose/UI thread can freeze keypad
+    // input. Use a cancellable, slightly debounced background search instead.
+    var matchedContacts by remember { mutableStateOf<List<ContactEntry>>(emptyList()) }
+    var matchedFavorites by remember { mutableStateOf<List<ContactEntry>>(emptyList()) }
+    LaunchedEffect(contacts, query) {
+        val term = query.trim()
+        // Fast typing cancels older searches. Blank queries refresh immediately.
+        if (term.isNotEmpty()) kotlinx.coroutines.delay(75)
+        val results = withContext(Dispatchers.Default) {
+            val visible = if (term.isEmpty()) contacts
+                else contacts.filter { matchesContactSearch(it.name, it.number, term) }
+            visible to visible.filter { it.favorite }
+        }
+        matchedContacts = results.first
+        matchedFavorites = results.second
     }
     // Expensive call-note searches run off the UI thread. Fast consecutive
     // keystrokes cancel older searches, keeping scrolling and dialpad responsive.
