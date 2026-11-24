@@ -1,8 +1,7 @@
 name: Publish verified S Caller v1.9.18 APK
 on:
+  # Preserve old release, but do not republish v1.9.18 on later commits.
   workflow_dispatch:
-  push:
-    branches: [main]
 permissions:
   contents: write
   actions: read

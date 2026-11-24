@@ -1,8 +1,7 @@
 name: Build S Caller v1.9.18 APK
 on:
+  # Legacy v1.9.18 preview: retain manual audit, no automatic rebuild on new pushes.
   workflow_dispatch:
-  push:
-    branches: [main]
 permissions:
   contents: write
 jobs:
