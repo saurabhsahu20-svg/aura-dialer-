@@ -42,6 +42,9 @@ import com.scall.phone.data.callStartAccess
 import com.scall.phone.data.PhoneRepository
 import com.scall.phone.data.PhotoStore
 import com.scall.phone.data.RecentEntry
+import com.scall.phone.data.MissedCallCursor
+import com.scall.phone.data.MissedCallBadgeStore
+import com.scall.phone.data.countNewMissedCalls
 import com.scall.phone.data.CallHistoryStore
 import com.scall.phone.data.SimAccount
 import com.scall.phone.data.SimPreferences
@@ -83,6 +86,7 @@ internal fun SCallApp(
     val photos = remember { PhotoStore(context.applicationContext) }
     val simPrefs = remember { SimPreferences(context.applicationContext) }
     val historyStore = remember { CallHistoryStore(context.applicationContext) }
+    val missedBadgeStore = remember { MissedCallBadgeStore(context.applicationContext) }
     val actionScope = rememberCoroutineScope()
     var theme by remember { mutableStateOf(prefs.getString("theme", "System") ?: "System") }
     var enableSwipes by remember { mutableStateOf(prefs.getBoolean("swipe_call", true)) }
@@ -96,6 +100,10 @@ internal fun SCallApp(
     var localRefresh by remember { mutableIntStateOf(0) }
     var contacts by remember { mutableStateOf<List<ContactEntry>>(emptyList()) }
     var recents by remember { mutableStateOf<List<RecentEntry>>(emptyList()) }
+    var missedSeenThrough by remember { mutableStateOf<MissedCallCursor?>(null) }
+    val newMissedCount = remember(recents, missedSeenThrough) {
+        missedSeenThrough?.let { countNewMissedCalls(recents, it) } ?: 0
+    }
     var editingHistory by remember { mutableStateOf<RecentEntry?>(null) }
     var historyTitle by rememberSaveable { mutableStateOf("") }
     var historyNote by rememberSaveable { mutableStateOf("") }
@@ -154,6 +162,13 @@ internal fun SCallApp(
         pageHistory = pageHistory.filterNot { it == "Recording Manager" }
     }
 
+    fun acknowledgeMissedCalls() {
+        if (!loadedOnce) return
+        // Only rows actually loaded at the moment of viewing are acknowledged.
+        // New calls arriving afterwards will still appear in the badge.
+        missedSeenThrough = missedBadgeStore.markViewed(recents)
+    }
+
     fun navigateTo(destination: String) {
         if (destination == page) return
         pageHistory = pushPageHistory(pageHistory, page, destination)
@@ -200,6 +215,9 @@ internal fun SCallApp(
             val newContacts = repository.contacts()
             val newRecents = repository.recentCalls(newContacts)
             contacts = newContacts
+            // Initialize once from existing call history so years-old missed
+            // entries do not reappear as a fresh notification after an update.
+            missedSeenThrough = missedBadgeStore.initialize(newRecents)
             recents = newRecents
             loadedOnce = true
         } catch (error: kotlinx.coroutines.CancellationException) {
@@ -656,8 +674,20 @@ internal fun SCallApp(
                         tabs.forEach { tab ->
                             NavigationBarItem(
                                 selected = page == tab.label,
-                                onClick = { navigateTo(tab.label); query = "" },
-                                icon = { Icon(tab.icon, contentDescription = tab.label) },
+                                onClick = {
+                                    if (tab.label == "Recents") acknowledgeMissedCalls()
+                                    navigateTo(tab.label)
+                                    query = ""
+                                },
+                                icon = {
+                                    if (tab.label == "Recents" && newMissedCount > 0) {
+                                        BadgedBox(badge = {
+                                            Badge {
+                                                Text(if (newMissedCount > 99) "99+" else "$newMissedCount")
+                                            }
+                                        }) { Icon(tab.icon, contentDescription = tab.label) }
+                                    } else Icon(tab.icon, contentDescription = tab.label)
+                                },
                                 label = { Text(tab.label, fontSize = 11.sp,
                                     fontWeight = if (page == tab.label) FontWeight.SemiBold else FontWeight.Normal) },
                                 alwaysShowLabel = true,
@@ -850,6 +880,10 @@ internal fun SCallApp(
                             )
                             else -> RecentsScreen(
                                 calls = matchedRecents,
+                                // The fresh badge is calculated from the full call log,
+                                // not a filtered/search subset.
+                                newMissedCount = newMissedCount,
+                                onMissedViewed = ::acknowledgeMissedCalls,
                                 photos = photos, historyStore = historyStore, loading = isLoading,
                                 swipesEnabled = enableSwipes,
                                 selectionMode = historySelectionMode,
@@ -1024,6 +1058,8 @@ private fun ContactsScreen(
 @Composable
 private fun RecentsScreen(
     calls: List<RecentEntry>,
+    newMissedCount: Int,
+    onMissedViewed: () -> Unit,
     photos: PhotoStore,
     historyStore: CallHistoryStore,
     loading: Boolean,
@@ -1065,9 +1101,17 @@ private fun RecentsScreen(
                 Column {
                     Text("Call history", style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold)
-                    Text("${calls.size} calls · ${missedCount} missed",
+                    Text(
+                        if (newMissedCount > 0) "${calls.size} calls · $newMissedCount new missed"
+                        else "${calls.size} calls",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.labelMedium)
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                    if (newMissedCount > 0) {
+                        TextButton(onClick = onMissedViewed) {
+                            Text("Mark missed as viewed")
+                        }
+                    }
                 }
                 TextButton(onClick = { onSelectionModeChange(!selectionMode) }) {
                     Icon(if (selectionMode) Icons.Default.Close else Icons.Default.Checklist, null,
@@ -1100,10 +1144,14 @@ private fun RecentsScreen(
                 ).forEach { (direction, count) ->
                     FilterChip(
                         selected = filter == direction,
-                        onClick = { filter = direction },
+                        onClick = {
+                            filter = direction
+                            if (direction == CallDirection.MISSED) onMissedViewed()
+                        },
                         label = {
                             Text(
-                                "${direction.label} · $count",
+                                if (direction == CallDirection.MISSED)
+                                    "Missed history · $count" else "${direction.label} · $count",
                                 fontWeight = FontWeight.ExtraBold,
                                 color = direction.callTint()
                             )
