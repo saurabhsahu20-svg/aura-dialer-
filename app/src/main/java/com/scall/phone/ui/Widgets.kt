@@ -441,10 +441,10 @@ internal fun KeypadScreen(
     val hasNumber = value.any { it.isDigit() }
     val matches = remember(value, contacts) {
         val digits = value.filter(Char::isDigit)
-        if (digits.length < 2) emptyList() else contacts.filter {
+        if (digits.length < 2) emptyList() else contacts.asSequence().filter {
             it.number.filter(Char::isDigit).contains(digits) ||
                 t9(it.name).startsWith(digits)
-        }.take(3)
+        }.take(3).toList()
     }
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 17.dp),
@@ -567,8 +567,12 @@ internal fun KeypadScreen(
             // On compact screens, retain 72dp touch targets and scroll if needed.
             val rowHeight = adaptiveDialRowHeight(maxHeight.value, matches.size).dp
             Column(
-                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                verticalArrangement = if (matches.isEmpty()) Arrangement.SpaceEvenly
+                // Fill the available keypad viewport even inside verticalScroll.
+                // Otherwise unbounded height leaves the lower half blank.
+                modifier = Modifier.fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .heightIn(min = maxHeight),
+                verticalArrangement = if (matches.isEmpty()) Arrangement.SpaceBetween
                     else Arrangement.Top
             ) {
                 if (matches.isNotEmpty()) {

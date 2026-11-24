@@ -40,6 +40,23 @@ internal data class SimAccount(val handle: PhoneAccountHandle, val label: String
 
 internal fun normalizeNumber(number: String): String = number.filter { it.isDigit() || it == '+' }
 
+/** Match Indian mobile formats, never unrelated countries sharing the final ten digits. */
+internal fun contactLookupKey(raw: String): String? {
+    val input = raw.trim()
+    val digits = input.filter(Char::isDigit)
+    if (digits.isEmpty() || input.any { !it.isDigit() && it !in "+ -()" }) return null
+    if (input.count { it == '+' } > 1 || ('+' in input && !input.startsWith("+"))) return null
+    val mobile = when {
+        !input.startsWith("+") && digits.length == 10 && digits.first() in '6'..'9' -> digits
+        !input.startsWith("+") && digits.length == 11 && digits.startsWith("0") &&
+            digits[1] in '6'..'9' -> digits.drop(1)
+        digits.length == 12 && digits.startsWith("91") && digits[2] in '6'..'9' -> digits.drop(2)
+        else -> null
+    }
+    return if (mobile != null) "IN:$mobile"
+        else digits.takeIf { it.length in 7..15 }?.let { "INT:$it" }
+}
+
 internal class PhoneRepository(private val context: Context) {
     private fun permitted(permission: String) =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
@@ -95,7 +112,11 @@ internal class PhoneRepository(private val context: Context) {
 
     suspend fun recentCalls(contacts: List<ContactEntry>): List<RecentEntry> = withContext(Dispatchers.IO) {
         if (!hasLogsPermission()) return@withContext emptyList()
-        val byNumber = contacts.associateBy { normalizeNumber(it.number).takeLast(10) }
+        val byNumber = LinkedHashMap<String, ContactEntry>(contacts.size)
+        for (contact in contacts) {
+            val key = contactLookupKey(contact.number) ?: continue
+            if (key !in byNumber) byNumber[key] = contact
+        }
         val recent = mutableListOf<RecentEntry>()
         try {
             context.contentResolver.query(
@@ -106,7 +127,7 @@ internal class PhoneRepository(private val context: Context) {
             )?.use { cursor ->
                 while (cursor.moveToNext()) {
                     val number = cursor.getString(1).orEmpty()
-                    val contact = byNumber[normalizeNumber(number).takeLast(10)]
+                    val contact = contactLookupKey(number)?.let(byNumber::get)
                     val cachedName = cursor.getString(2).orEmpty()
                     recent += RecentEntry(
                         id = cursor.getLong(0),

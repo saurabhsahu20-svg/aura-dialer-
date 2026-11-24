@@ -560,13 +560,19 @@ internal fun SCallApp(
                                 isDeletingHistory = false
                                 pendingHistoryDeletion = emptySet()
                                 if (deleted >= 0) {
-                                    recents.filter { it.id in ids }.forEach(historyStore::remove)
+                                    // Do not discard notes for call rows not confirmed deleted.
+                                    if (deleted == ids.size) {
+                                        recents.filter { it.id in ids }.forEach(historyStore::remove)
+                                    }
                                     selectedHistoryIds = emptySet()
                                     historySelectionMode = false
                                     localRefresh++
-                                    Toast.makeText(context,
-                                        if (deleted == 0) "No matching calls to delete" else "Deleted $deleted call(s)",
-                                        Toast.LENGTH_SHORT).show()
+                                    val resultMessage = when {
+                                        deleted == 0 -> "No matching calls to delete"
+                                        deleted < ids.size -> "Deleted $deleted of ${ids.size} call(s); others kept"
+                                        else -> "Deleted $deleted call(s)"
+                                    }
+                                    Toast.makeText(context, resultMessage, Toast.LENGTH_SHORT).show()
                                 } else {
                                     Toast.makeText(context,
                                         "Delete blocked. Set S call as default phone app and allow Call log access.",
