@@ -4,6 +4,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
@@ -54,6 +55,11 @@ class SCallUiSmokeTest {
     fun keypadDoesNotLeaveAnOversizedGapUnderTheDigits() {
         rule.onNodeWithContentDescription("Keypad", useUnmergedTree = true).performClick()
         rule.waitForIdle()
+        // On compact emulator screens the fourth keypad row is intentionally
+        // reachable by scrolling. Unscrolled offscreen semantics report the
+        // placeholder Rect(0, 0, 0, 0), creating a false 532dp gap.
+        rule.onNodeWithContentDescription("#").performScrollTo()
+        rule.waitForIdle()
         val first = rule.onNodeWithContentDescription("1").fetchSemanticsNode().boundsInRoot
         val second = rule.onNodeWithContentDescription("4, GHI").fetchSemanticsNode().boundsInRoot
         val third = rule.onNodeWithContentDescription("7, PQRS").fetchSemanticsNode().boundsInRoot
@@ -64,7 +70,7 @@ class SCallUiSmokeTest {
         val metrics = "first=$first second=$second third=$third last=$last call=$call density=$density"
         org.junit.Assert.assertTrue(
             "Too much unused space below keypad: ${gapDp}dp; $metrics",
-            gapDp >= 0f && gapDp < 100f
+            last.width > 0f && last.height > 0f && gapDp >= 0f && gapDp < 100f
         )
     }
 
