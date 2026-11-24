@@ -566,14 +566,13 @@ internal fun KeypadScreen(
             // Use the available space instead of the old fixed 75dp keypad rows.
             // On compact screens, retain 72dp touch targets and scroll if needed.
             val rowHeight = adaptiveDialRowHeight(maxHeight.value, matches.size).dp
+            // A scroll container measures its child at unbounded height, so
+            // Arrangement.SpaceBetween cannot fill the box by itself. Calculate
+            // the gap between digit rows from the real, bounded viewport height.
+            val emptyKeySpacing = ((maxHeight - rowHeight * 4) / 3).coerceAtLeast(0.dp)
             Column(
-                // Fill the available keypad viewport even inside verticalScroll.
-                // Otherwise unbounded height leaves the lower half blank.
-                modifier = Modifier.fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .heightIn(min = maxHeight),
-                verticalArrangement = if (matches.isEmpty()) Arrangement.SpaceBetween
-                    else Arrangement.Top
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.Top
             ) {
                 if (matches.isNotEmpty()) {
                 Text(
@@ -611,6 +610,9 @@ internal fun KeypadScreen(
             }
                 if (matches.isNotEmpty()) Spacer(Modifier.height(7.dp))
                 for (row in 0 until 4) {
+                    if (matches.isEmpty() && row > 0) {
+                        Spacer(Modifier.height(emptyKeySpacing))
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth().height(rowHeight)
                             .padding(vertical = 5.dp),
