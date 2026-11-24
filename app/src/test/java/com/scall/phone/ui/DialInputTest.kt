@@ -46,4 +46,11 @@ class DialInputTest {
     @Test fun invalidHeightStillCreatesUsableButtons() {
         assertEquals(72f, adaptiveDialRowHeight(Float.NaN, 0), 0.01f)
     }
+    @Test fun fixedKeypadHeightDoesNotDependOnContactMatches() {
+        assertEquals(60f, stableDialRowHeight(240f), 0.01f)
+        assertEquals(52f, stableDialRowHeight(160f), 0.01f)
+        assertEquals(90f, stableDialRowHeight(540f), 0.01f)
+        assertEquals(52f, stableDialRowHeight(Float.NaN), 0.01f)
+    }
+
 }
