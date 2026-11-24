@@ -58,7 +58,16 @@ class SCallUiSmokeTest {
         // On compact emulator screens the fourth keypad row is intentionally
         // reachable by scrolling. Unscrolled offscreen semantics report the
         // placeholder Rect(0, 0, 0, 0), creating a false 532dp gap.
-        rule.onNodeWithContentDescription("#").performScrollTo()
+        // Some compact layouts scroll the keypad, while a well-sized empty
+        // keypad fills the viewport and has no scroll parent. Both are valid.
+        // Do not hide other test failures (e.g. missing or invisible digits).
+        try {
+            rule.onNodeWithContentDescription("#").performScrollTo()
+        } catch (error: AssertionError) {
+            if (!error.message.orEmpty().contains("no parent layout with a Scroll SemanticsAction")) {
+                throw error
+            }
+        }
         rule.waitForIdle()
         val first = rule.onNodeWithContentDescription("1").fetchSemanticsNode().boundsInRoot
         val second = rule.onNodeWithContentDescription("4, GHI").fetchSemanticsNode().boundsInRoot
