@@ -217,7 +217,11 @@ internal fun SCallApp(
             contacts = newContacts
             // Initialize once from existing call history so years-old missed
             // entries do not reappear as a fresh notification after an update.
-            missedSeenThrough = missedBadgeStore.initialize(newRecents)
+            // Do not set the first-run baseline to zero when Android denies
+            // Call Log permission: that would turn all old calls into "new"
+            // the moment permission is later granted.
+            missedSeenThrough = if (repository.hasLogsPermission())
+                missedBadgeStore.initialize(newRecents) else null
             recents = newRecents
             loadedOnce = true
         } catch (error: kotlinx.coroutines.CancellationException) {
