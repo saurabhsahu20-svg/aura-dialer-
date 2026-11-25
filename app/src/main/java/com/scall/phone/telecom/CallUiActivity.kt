@@ -159,6 +159,17 @@ class CallUiActivity : ComponentActivity() {
                     CallBridge.refreshFromTelecom()
                     delay(2500)
                     noCallTimeout = CallBridge.current.value == null
+                    // A stale incoming-call notification might launch this UI
+                    // AFTER Telecom already ended the call. Give delayed Telecom
+                    // binding a grace period, then dismiss the orphaned screen.
+                    if (noCallTimeout) {
+                        delay(1500)
+                        CallBridge.refreshFromTelecom()
+                        if (CallBridge.current.value == null) {
+                            accidentalTouchGuard.stop()
+                            finish()
+                        }
+                    }
                 }
             }
             CallScreen(
