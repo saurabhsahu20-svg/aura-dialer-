@@ -16,6 +16,10 @@ import kotlinx.coroutines.flow.asStateFlow
 
 internal enum class EndCallProgress { IDLE, ENDING, STILL_ACTIVE }
 
+/** A Telecom-disconnected or orphaned callback must not retain a ghost call. */
+internal fun retainTelecomCallCallback(reportedByTelecom: Boolean, state: Int): Boolean =
+    reportedByTelecom && state != Call.STATE_DISCONNECTED
+
 internal data class CallSnapshot(
     val number: String,
     val displayName: String,
@@ -111,15 +115,34 @@ internal object CallBridge {
      * reconnect state instead of a fake connected-call screen.
      */
     fun refreshFromTelecom() {
-        val live = try { service?.calls?.toList().orEmpty() }
-            catch (_: Exception) { emptyList() }
-        live.forEach { call ->
-            try {
-                if (call.state != Call.STATE_DISCONNECTED && !callbacks.containsKey(call)) {
-                    addCall(call)
+        // Only Telecom's actual live-call list is authoritative. A stale Call
+        // callback can survive an OEM's missing onCallRemoved() event and keep
+        // the ended-call screen visible indefinitely.
+        val telecomCalls: List<Call>? = try {
+            service?.calls?.toList()
+        } catch (error: RuntimeException) {
+            android.util.Log.w("SCallBridge", "Unable to refresh Telecom calls", error)
+            null
+        }
+        // A null service or failed query is NOT evidence that a call ended.
+        if (telecomCalls != null) {
+            // Reconcile callback registry against Telecom. Never mistake a
+            // previous call's stale callback for a new/connected call.
+            val stale = callbacks.keys.filter {
+                !retainTelecomCallCallback(it in telecomCalls, it.state)
+            }
+            stale.forEach { oldCall ->
+                callbacks.remove(oldCall)?.let { safelyUnregister(oldCall, it) }
+                if (endingTarget === oldCall) clearEnding()
+            }
+            telecomCalls.forEach { call ->
+                try {
+                    if (call.state != Call.STATE_DISCONNECTED && !callbacks.containsKey(call)) {
+                        addCall(call)
+                    }
+                } catch (error: RuntimeException) {
+                    android.util.Log.w("SCallBridge", "Unable to register live Telecom call", error)
                 }
-            } catch (error: RuntimeException) {
-                android.util.Log.w("SCallBridge", "Unable to register active Telecom call", error)
             }
         }
         refresh()
