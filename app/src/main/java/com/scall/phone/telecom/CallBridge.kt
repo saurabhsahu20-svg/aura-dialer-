@@ -16,6 +16,10 @@ import kotlinx.coroutines.flow.asStateFlow
 
 internal enum class EndCallProgress { IDLE, ENDING, STILL_ACTIVE }
 
+/** A Telecom-disconnected or orphaned callback must not retain a ghost call. */
+internal fun retainTelecomCallCallback(reportedByTelecom: Boolean, state: Int): Boolean =
+    reportedByTelecom && state != Call.STATE_DISCONNECTED
+
 internal data class CallSnapshot(
     val number: String,
     val displayName: String,
@@ -125,8 +129,7 @@ internal object CallBridge {
             // Reconcile callback registry against Telecom. Never mistake a
             // previous call's stale callback for a new/connected call.
             val stale = callbacks.keys.filter {
-                it !in telecomCalls ||
-                    it.state == Call.STATE_DISCONNECTED
+                !retainTelecomCallCallback(it in telecomCalls, it.state)
             }
             stale.forEach { oldCall ->
                 callbacks.remove(oldCall)?.let { safelyUnregister(oldCall, it) }
