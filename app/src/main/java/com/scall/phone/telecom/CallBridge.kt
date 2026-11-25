@@ -1,6 +1,9 @@
 package com.scall.phone.telecom
 
 import android.os.Build
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -10,6 +13,7 @@ import android.telecom.CallEndpoint
 import android.telecom.CallEndpointException
 import android.telecom.CallAudioState
 import android.telecom.InCallService
+import android.telecom.TelecomManager
 import android.telecom.VideoProfile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,6 +23,15 @@ internal enum class EndCallProgress { IDLE, ENDING, STILL_ACTIVE }
 /** A Telecom-disconnected or orphaned callback must not retain a ghost call. */
 internal fun retainTelecomCallCallback(reportedByTelecom: Boolean, state: Int): Boolean =
     reportedByTelecom && state != Call.STATE_DISCONNECTED
+
+/** Never use the system fallback when another call could be disconnected. */
+internal fun canSafelyTryTelecomEndFallback(
+    callState: Int,
+    liveCallCount: Int,
+    hasPermission: Boolean
+): Boolean =
+    hasPermission && liveCallCount == 1 &&
+        callState in listOf(Call.STATE_ACTIVE, Call.STATE_DIALING, Call.STATE_CONNECTING)
 
 internal data class CallSnapshot(
     val number: String,
@@ -349,11 +362,42 @@ internal object CallBridge {
             }
         }, 1200L)
         mainHandler.postDelayed({
+            if (!stillSameLiveCall()) return@postDelayed
+            // Some vendor dialer stacks ignore Call.disconnect() from an
+            // InCallService but honor TelecomManager.endCall(). This API is
+            // deprecated but supported on Android 9+, and used *only* as a
+            // permission-checked fallback for a SINGLE ongoing non-ringing
+            // phone call, so a second or incoming call cannot be ended.
+            val owner = service
+            if (owner != null && Build.VERSION.SDK_INT >= 28) {
+                val allCalls = runCatching { owner.calls.toList() }.getOrNull()
+                val count = allCalls?.count {
+                    it.state != Call.STATE_DISCONNECTED &&
+                        it.state != Call.STATE_DISCONNECTING
+                } ?: 0
+                val permissionGranted =
+                    owner.checkSelfPermission(Manifest.permission.ANSWER_PHONE_CALLS) ==
+                        PackageManager.PERMISSION_GRANTED
+                if (canSafelyTryTelecomEndFallback(call.state, count, permissionGranted)) {
+                    try {
+                        val manager = owner.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+                        @Suppress("DEPRECATION")
+                        val accepted = manager?.endCall() == true
+                        if (!accepted) {
+                            android.util.Log.w("SCallBridge", "Telecom fallback did not accept end request")
+                        }
+                    } catch (error: RuntimeException) {
+                        android.util.Log.w("SCallBridge", "Telecom fallback unavailable", error)
+                    }
+                }
+            }
+        }, 1650L)
+        mainHandler.postDelayed({
             if (stillSameLiveCall()) {
                 endProgressMutable.value = EndCallProgress.STILL_ACTIVE
                 refresh()
             }
-        }, 2200L)
+        }, 2700L)
     }
 
     private fun clearEnding() {

@@ -26,6 +26,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -125,7 +128,8 @@ internal fun CallScreen(
     call: CallSnapshot?,
     onClose: () -> Unit,
     phoneServiceUnavailable: Boolean = false,
-    onRetry: () -> Unit = {}
+    onRetry: () -> Unit = {},
+    onEndButtonBoundsChanged: (Rect?) -> Unit = {}
 ) {
     val context = LocalContext.current
     val store = remember { PhotoStore(context.applicationContext) }
@@ -261,7 +265,11 @@ internal fun CallScreen(
                         onClick = CallBridge::disconnect,
                         enabled = true,
                         colors = IconButtonDefaults.filledIconButtonColors(containerColor = Decline),
-                        modifier = Modifier.size(76.dp)
+                        modifier = Modifier.size(76.dp).onGloballyPositioned { coordinates ->
+                            // Deliver exact button geometry so a stuck OEM
+                            // proximity sensor cannot intercept deliberate Hang Up.
+                            onEndButtonBoundsChanged(coordinates.boundsInWindow())
+                        }
                     ) { Icon(Icons.Default.CallEnd, "End call", Modifier.size(32.dp), tint = Color.White) }
                     if (endProgress != EndCallProgress.IDLE) {
                         Spacer(Modifier.height(7.dp))

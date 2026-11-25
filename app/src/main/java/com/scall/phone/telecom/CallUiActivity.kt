@@ -9,6 +9,8 @@ import androidx.compose.runtime.remember
 import android.os.Build
 import android.view.WindowManager
 import android.view.MotionEvent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.LaunchedEffect
@@ -21,21 +23,37 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.scall.phone.ui.CallScreen
 import kotlinx.coroutines.delay
 
+// End Call is explicitly allowed even if an OEM's proximity sensor stays
+// near after the phone was moved away from the ear.
+internal fun isHangUpButtonTouch(x: Float, y: Float, bounds: Rect?): Boolean =
+    bounds?.contains(Offset(x, y)) == true
+
 class CallUiActivity : ComponentActivity() {
     private val accidentalTouchGuard by lazy { CallProximityGuard(this) }
+    private var endButtonBounds: Rect? = null
+    private var deliberateHangUpGesture = false
     private var suppressCurrentGesture = false
 
-    // Near-ear gestures must not activate Mute, Speaker, Hold or Hang Up.
+    // Protect other controls against near-ear touches, but always deliver
+    // deliberate taps inside the red End Call button. A stuck near-sensor
+    // previously consumed ACTION_DOWN and the call could only be ended remotely.
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-            suppressCurrentGesture = accidentalTouchGuard.shouldSuppressTouch
+            deliberateHangUpGesture = isHangUpButtonTouch(
+                event.x, event.y, endButtonBounds
+            )
+            suppressCurrentGesture =
+                accidentalTouchGuard.shouldSuppressTouch && !deliberateHangUpGesture
         }
-        val blocked = suppressCurrentGesture || accidentalTouchGuard.shouldSuppressTouch
+        val blocked = suppressCurrentGesture ||
+            (accidentalTouchGuard.shouldSuppressTouch && !deliberateHangUpGesture)
+        val result = if (blocked) true else super.dispatchTouchEvent(event)
         if (event.actionMasked == MotionEvent.ACTION_UP ||
             event.actionMasked == MotionEvent.ACTION_CANCEL) {
             suppressCurrentGesture = false
+            deliberateHangUpGesture = false
         }
-        return if (blocked) true else super.dispatchTouchEvent(event)
+        return result
     }
 
     override fun onStart() {
@@ -46,6 +64,7 @@ class CallUiActivity : ComponentActivity() {
     override fun onStop() {
         // Stop protecting the display immediately when the call UI leaves.
         accidentalTouchGuard.stop()
+        endButtonBounds = null
         WindowInsetsControllerCompat(window, window.decorView)
             .show(WindowInsetsCompat.Type.statusBars())
         super.onStop()
@@ -175,6 +194,7 @@ class CallUiActivity : ComponentActivity() {
             CallScreen(
                 call = call,
                 onClose = { finish() },
+                onEndButtonBoundsChanged = { bounds -> endButtonBounds = bounds },
                 phoneServiceUnavailable = noCallTimeout,
                 onRetry = {
                     noCallTimeout = false
