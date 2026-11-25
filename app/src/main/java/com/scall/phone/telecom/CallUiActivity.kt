@@ -14,6 +14,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import kotlinx.coroutines.isActive
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -124,16 +125,35 @@ class CallUiActivity : ComponentActivity() {
             var retryAttempt by remember { androidx.compose.runtime.mutableIntStateOf(0) }
             var noCallTimeout by remember { mutableStateOf(false) }
             var hadLiveCall by remember { mutableStateOf(false) }
-            // Audio route/status updates can arrive many times per second.
-            // Retry only on actual call presence changes, not each snapshot object.
+            val endingProgress by CallBridge.endProgress.collectAsState()
+
+            // Some Android manufacturers omit or delay onCallRemoved while
+            // ending a call. Recheck actual Telecom calls for a bounded period
+            // after an End tap so the activity does not retain stale UI state.
+            LaunchedEffect(endingProgress) {
+                if (endingProgress != EndCallProgress.IDLE) {
+                    repeat(20) {
+                        if (!isActive || CallBridge.current.value == null) return@LaunchedEffect
+                        CallBridge.refreshFromTelecom()
+                        delay(250)
+                    }
+                }
+            }
+
+            // Dismiss automatically once Telecom no longer reports a live call.
+            // Do not close the screen merely because a disconnect was requested:
+            // the call may genuinely still be connected on a delayed network.
             LaunchedEffect(call != null, retryAttempt) {
                 if (call != null) {
                     hadLiveCall = true
                     noCallTimeout = false
                 } else if (hadLiveCall) {
-                    // Android Telecom has removed the call; dismiss the controls.
-                    delay(600)
-                    if (CallBridge.current.value == null) finish()
+                    delay(200)
+                    CallBridge.refreshFromTelecom()
+                    if (CallBridge.current.value == null) {
+                        accidentalTouchGuard.stop()
+                        finish()
+                    }
                 } else {
                     noCallTimeout = false
                     CallBridge.refreshFromTelecom()
