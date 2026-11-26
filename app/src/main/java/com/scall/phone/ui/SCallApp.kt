@@ -99,6 +99,8 @@ internal fun SCallApp(
     var query by rememberSaveable { mutableStateOf("") }
     var dialNumber by rememberSaveable { mutableStateOf("") }
     var activeContact by remember { mutableStateOf<ContactEntry?>(null) }
+    // Keep call detail selection by stable CallLog row ID across app redraws.
+    var selectedCallId by rememberSaveable { mutableStateOf<Long?>(null) }
     var photoEditor by remember { mutableStateOf<ContactEntry?>(null) }
     var newPhoto by remember { mutableStateOf<Uri?>(null) }
     var localRefresh by remember { mutableIntStateOf(0) }
@@ -231,6 +233,7 @@ internal fun SCallApp(
                 photoEditor = null
                 newPhoto = null
             }
+            selectedCallId != null -> selectedCallId = null
             activeContact != null -> activeContact = null
             historySelectionMode -> {
                 historySelectionMode = false
@@ -251,7 +254,7 @@ internal fun SCallApp(
     // Android system Back and gesture Back share the same behavior.
     // No primary-tab history: Recents is the sole exit destination.
     BackHandler(
-        enabled = photoEditor != null || activeContact != null ||
+        enabled = photoEditor != null || selectedCallId != null || activeContact != null ||
             historySelectionMode || query.isNotBlank() ||
             page != "Recents"
     ) {
@@ -674,10 +677,12 @@ internal fun SCallApp(
         Scaffold(
             containerColor = scheme.background,
             topBar = {
-                if (photoEditor != null || activeContact != null || page == "SIM Manager" || page == "Settings" ) {
+                if (photoEditor != null || selectedCallId != null ||
+                    activeContact != null || page == "SIM Manager" || page == "Settings" ) {
                     TopAppBar(
                         title = { Text(when {
                             photoEditor != null -> "Caller photo"
+                            selectedCallId != null -> "Call details"
                             activeContact != null -> "Contact details"
                             page == "SIM Manager" -> "SIM & network"
                             else -> "Settings"
@@ -740,7 +745,8 @@ internal fun SCallApp(
                 }
             },
             bottomBar = {
-                if (activeContact == null && photoEditor == null && page != "Settings" && page != "SIM Manager") {
+                if (selectedCallId == null && activeContact == null && photoEditor == null &&
+                    page != "Settings" && page != "SIM Manager") {
                     NavigationBar(containerColor = scheme.surface, tonalElevation = 2.dp) {
                         tabs.forEach { tab ->
                             NavigationBarItem(
@@ -794,6 +800,27 @@ internal fun SCallApp(
                             Toast.makeText(context, "Custom photo removed", Toast.LENGTH_SHORT).show()
                         }
                     )
+                    selectedCallId != null -> {
+                        val chosen = recents.firstOrNull { it.id == selectedCallId }
+                        if (chosen == null) {
+                            EmptyState("Call details unavailable",
+                                "This call is no longer in Android's call history.")
+                        } else {
+                            val related = remember(recents, chosen.id) {
+                                callsForSameNumber(recents, chosen)
+                            }
+                            CallDetailsScreen(
+                                selected = chosen,
+                                relatedCalls = related,
+                                note = historyStore.note(chosen),
+                                title = historyStore.title(chosen),
+                                photo = photos.photoFor(chosen.number) ?: chosen.photo,
+                                onSelectCall = { selectedCallId = it.id },
+                                onCall = ::requestCall,
+                                onMessage = ::requestMessage
+                            )
+                        }
+                    }
                     activeContact != null -> ContactDetailsScreen(
                         contact = activeContact!!,
                         photo = photos.photoFor(activeContact!!.number) ?: activeContact!!.photo,
@@ -998,8 +1025,9 @@ internal fun SCallApp(
                                 onMessage = ::requestMessage,
                                 onChat = ::openExternalChat,
                                 onDetails = { entry ->
-                                    activeContact = contacts.firstOrNull { it.number == entry.number }
-                                        ?: ContactEntry(0, entry.name, entry.number, entry.photo, false)
+                                    // Open the actual call-log event, not the
+                                    // generic contact photo/details page.
+                                    selectedCallId = entry.id
                                 }
                             )
                         }
@@ -1682,7 +1710,7 @@ private fun SettingsScreen(
             }
         }
         item {
-            Text("S call · v1.9.36\nBeautiful calls. Simple experience.",
+            Text("S call · v1.9.37\nBeautiful calls. Simple experience.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
