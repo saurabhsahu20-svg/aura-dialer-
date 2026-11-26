@@ -256,16 +256,30 @@ class SCallInCallService : InCallService() {
             .setAutoCancel(false)
 
         if (incoming) {
-            // CallStyle ranks real phone calls prominently on Android 12+ and
-            // provides accessible answer/decline actions on older versions.
-            builder.setStyle(
-                NotificationCompat.CallStyle.forIncomingCall(
-                    person, declineIntent, answerIntent
+            // RINGING must show who is calling and Answer/Reject, even when an
+            // OEM's CallStyle implementation fails. Keep the FSI on both paths.
+            try {
+                builder.setStyle(
+                    NotificationCompat.CallStyle.forIncomingCall(
+                        person, declineIntent, answerIntent
+                    )
                 )
-            )
+            } catch (error: RuntimeException) {
+                android.util.Log.w("SCallInCallService",
+                    "Incoming CallStyle not supported; using action notification", error)
+                builder.addAction(
+                    android.R.drawable.ic_menu_close_clear_cancel, "Decline", declineIntent
+                )
+                builder.addAction(android.R.drawable.sym_action_call, "Answer", answerIntent)
+            }
             builder.setFullScreenIntent(uiPending, true)
         } else {
-            builder.setStyle(NotificationCompat.CallStyle.forOngoingCall(person, hangUpIntent))
+            try {
+                builder.setStyle(NotificationCompat.CallStyle.forOngoingCall(person, hangUpIntent))
+            } catch (error: RuntimeException) {
+                android.util.Log.w("SCallInCallService", "Ongoing CallStyle not supported", error)
+                builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, "End", hangUpIntent)
+            }
         }
 
         val permissionGranted = Build.VERSION.SDK_INT < 33 ||
