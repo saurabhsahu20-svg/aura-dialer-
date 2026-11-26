@@ -3,6 +3,8 @@ package com.scall.phone
 import android.provider.CallLog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertExists
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -44,6 +46,6 @@ class SCallDetailsUiTest {
         rule.onNodeWithText("Saved Caller").assertExists()
         rule.onNodeWithText("Incoming call recorded at").assertExists()
         rule.onNodeWithText("Call duration").assertExists()
-        rule.onNodeWithText("1m 32s").assertExists()
+        rule.onAllNodesWithText("1m 32s").onFirst().assertExists()
     }
 }
