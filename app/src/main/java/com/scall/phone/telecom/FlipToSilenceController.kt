@@ -49,12 +49,14 @@ internal class FlipToSilenceController(
     private val manager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
     private val accelerometer = manager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     private var monitoredCall: Call? = null
+    private var alreadySilencedCall: Call? = null
     private var detector = FaceDownSilenceDetector()
     private var registered = false
 
     fun update(call: Call?, enabled: Boolean) {
         val ringing = if (enabled && call?.state == Call.STATE_RINGING) call else null
-        if (ringing === monitoredCall) return
+        if (ringing == null) alreadySilencedCall = null
+        if (ringing === monitoredCall || ringing === alreadySilencedCall) return
         stop()
         if (ringing == null || accelerometer == null) return
         detector = FaceDownSilenceDetector()
@@ -75,6 +77,7 @@ internal class FlipToSilenceController(
             event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
         if (event.values.size < 3) return
         if (detector.onReading(event.values[2], event.timestamp / 1_000_000L)) {
+            alreadySilencedCall = monitoredCall
             try {
                 // This silences ONLY the current ringtone; it never rejects a call.
                 silence()
