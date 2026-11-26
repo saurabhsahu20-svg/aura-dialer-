@@ -51,7 +51,10 @@ class SCallInCallService : InCallService() {
     private var lastPostedAlert: CallAlertSignature? = null
     private val callerAnnouncer by lazy { CallerNameAnnouncer(applicationContext) }
     private val flipToSilence by lazy {
-        FlipToSilenceController(this) { silenceCurrentRingtoneIfDefaultDialer() }
+        FlipToSilenceController(this) {
+            callerAnnouncer.silenceSpeech()
+            silenceCurrentRingtoneIfDefaultDialer()
+        }
     }
 
     // Android explicitly permits TelecomManager.silenceRinger() to the
