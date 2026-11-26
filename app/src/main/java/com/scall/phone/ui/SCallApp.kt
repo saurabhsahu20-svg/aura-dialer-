@@ -1425,7 +1425,7 @@ private fun SettingsScreen(
                             IncomingCallAccess.NEED_NOTIFICATION_PERMISSION ->
                                 "Allow S call notifications, so ringing calls appear on screen"
                             IncomingCallAccess.NEED_NOTIFICATION_CHANNEL ->
-                                "Enable the Phone calls notification channel"
+                                "Set Phone calls notifications to HIGH / Pop on screen. Low or Default priority may vibrate without showing who is calling"
                             IncomingCallAccess.NEED_FULL_SCREEN_ACCESS ->
                                 "Allow full-screen alerts in Android settings for locked screen calls"
                             IncomingCallAccess.READY ->

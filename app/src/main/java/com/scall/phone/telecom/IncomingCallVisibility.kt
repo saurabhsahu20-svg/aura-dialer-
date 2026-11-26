@@ -26,6 +26,10 @@ internal enum class IncomingCallAccess {
     READY
 }
 
+/** A low/default channel may vibrate but cannot reliably show heads-up caller UI. */
+internal fun incomingCallChannelCanHeadsUp(importance: Int?): Boolean =
+    importance != null && importance >= NotificationManager.IMPORTANCE_HIGH
+
 internal fun resolveIncomingCallAccess(
     defaultDialer: Boolean,
     notificationsAllowed: Boolean,
@@ -74,9 +78,9 @@ internal object IncomingCallVisibility {
             .areNotificationsEnabled()
         // Android 6 and 7 do not have notification channels at all.
         val channelAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
-            (notificationManager.getNotificationChannel(CHANNEL_ID)?.importance?.let {
-                it != NotificationManager.IMPORTANCE_NONE
-            } == true)
+            incomingCallChannelCanHeadsUp(
+                notificationManager.getNotificationChannel(CHANNEL_ID)?.importance
+            )
         val fullScreenAllowed = Build.VERSION.SDK_INT < 34 ||
             notificationManager.canUseFullScreenIntent()
         return resolveIncomingCallAccess(

@@ -19,6 +19,12 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 import androidx.core.content.ContextCompat
 import com.scall.phone.R
+import com.scall.phone.data.PhoneRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /**
  * Incoming calls belong to Android Telecom. Display an urgent CallStyle notification,
@@ -36,6 +42,26 @@ class SCallInCallService : InCallService() {
 
     private val callbackByCall = linkedMapOf<Call, Call.Callback>()
     private val stateCheckHandler = Handler(Looper.getMainLooper())
+    private val lookupScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val contactNames = mutableMapOf<Call, String>()
+    private val pendingContactLookups = mutableSetOf<Call>()
+
+    // Telecom's display name is often absent for ordinary SIM calls. Resolve
+    // a saved contact asynchronously, never blocking the incoming call alert.
+    private fun lookupIncomingContactName(call: Call) {
+        if (call.state != Call.STATE_RINGING || !pendingContactLookups.add(call)) return
+        val number = runCatching { call.details.handle?.schemeSpecificPart.orEmpty() }
+            .getOrDefault("")
+        if (number.isBlank()) return
+        lookupScope.launch {
+            val name = PhoneRepository(applicationContext).findContact(number)?.name
+            if (!name.isNullOrBlank() && call in callbackByCall &&
+                call.state == Call.STATE_RINGING) {
+                contactNames[call] = name
+                updateCallNotification()
+            }
+        }
+    }
 
     // Some OEMs deliver onCallAdded before the final RINGING state and do
     // not immediately dispatch a state change callback. Retry briefly while
@@ -98,6 +124,7 @@ class SCallInCallService : InCallService() {
         if (!callbackByCall.containsKey(call)) {
             val callback = object : Call.Callback() {
                 override fun onStateChanged(call: Call, state: Int) {
+                    if (state == Call.STATE_RINGING) lookupIncomingContactName(call)
                     updateCallNotification()
                 }
 
@@ -113,10 +140,13 @@ class SCallInCallService : InCallService() {
             }
         }
         updateCallNotification()
+        lookupIncomingContactName(call)
         recheckIncomingState(call)
     }
 
     override fun onCallRemoved(call: Call) {
+        contactNames.remove(call)
+        pendingContactLookups.remove(call)
         callbackByCall.remove(call)?.let { callback ->
             try {
                 call.unregisterCallback(callback)
@@ -185,6 +215,9 @@ class SCallInCallService : InCallService() {
             }
         }
         callbackByCall.clear()
+        contactNames.clear()
+        pendingContactLookups.clear()
+        lookupScope.cancel()
         stateCheckHandler.removeCallbacksAndMessages(null)
         try {
             CallBridge.unbind(this)
@@ -219,8 +252,9 @@ class SCallInCallService : InCallService() {
 
     private fun showCallNotification(call: Call) {
         val incoming = call.state == Call.STATE_RINGING
-        val caller = call.details.callerDisplayName?.toString()
-            ?.takeIf { it.isNotBlank() }
+        val caller = contactNames[call]
+            ?: call.details.callerDisplayName?.toString()
+                ?.takeIf { it.isNotBlank() }
             ?: call.details.handle?.schemeSpecificPart?.takeIf { it.isNotBlank() }
             ?: "Unknown caller"
         val uiPending = PendingIntent.getActivity(
