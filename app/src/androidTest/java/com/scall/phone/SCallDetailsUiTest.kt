@@ -2,11 +2,8 @@ package com.scall.phone
 
 import android.provider.CallLog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.test.assertExists
-import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.scall.phone.data.RecentEntry
 import com.scall.phone.ui.CallDetailsScreen
