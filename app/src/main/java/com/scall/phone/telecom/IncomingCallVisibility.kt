@@ -75,7 +75,9 @@ internal object IncomingCallVisibility {
         // Android 6 and 7 do not have notification channels at all.
         val channelAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
             (notificationManager.getNotificationChannel(CHANNEL_ID)?.importance?.let {
-                it != NotificationManager.IMPORTANCE_NONE
+                // IMPORTANCE_LOW/DEFAULT may allow sound/vibration but not
+                // a heads-up call banner. Ringing calls need HIGH or above.
+                it >= NotificationManager.IMPORTANCE_HIGH
             } == true)
         val fullScreenAllowed = Build.VERSION.SDK_INT < 34 ||
             notificationManager.canUseFullScreenIntent()
