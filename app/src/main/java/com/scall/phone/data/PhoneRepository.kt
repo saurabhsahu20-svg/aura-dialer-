@@ -148,6 +148,41 @@ internal class PhoneRepository(private val context: Context) {
     }
 
     /**
+     * When a user has viewed a new missed call, mark only its actual provider
+     * row as read (if we are the default dialer with WRITE_CALL_LOG). This can
+     * also help Android's own missed-call notification return to normal.
+     * It never deletes any call-history row.
+     */
+    suspend fun markMissedCallsRead(ids: Set<Long>): Int = withContext(Dispatchers.IO) {
+        if (ids.isEmpty() || !isDefaultDialer() || !hasWriteLogsPermission()) {
+            return@withContext 0
+        }
+        val values = android.content.ContentValues().apply {
+            put(CallLog.Calls.NEW, 0)
+            put(CallLog.Calls.IS_READ, 1)
+        }
+        var changed = 0
+        for (batch in ids.filter { it > 0 }.distinct().chunked(100)) {
+            val placeholders = batch.joinToString(",") { "?" }
+            val where = "${CallLog.Calls.TYPE} = ? AND ${CallLog.Calls._ID} IN ($placeholders)"
+            val args = (listOf(CallLog.Calls.MISSED_TYPE.toString()) +
+                batch.map(Long::toString)).toTypedArray()
+            try {
+                changed += context.contentResolver.update(
+                    CallLog.Calls.CONTENT_URI, values, where, args
+                )
+            } catch (error: SecurityException) {
+                android.util.Log.w("SCall", "Missed call read-state permission denied", error)
+                return@withContext changed
+            } catch (error: RuntimeException) {
+                android.util.Log.w("SCall", "Missed call read-state update unavailable", error)
+                return@withContext changed
+            }
+        }
+        changed
+    }
+
+    /**
      * Deletes ONLY explicitly selected system call-log row IDs.
      * Requires the default phone role and restricted WRITE_CALL_LOG permission.
      * Returns -1 if blocked; never claim success when the system rejects the operation.
