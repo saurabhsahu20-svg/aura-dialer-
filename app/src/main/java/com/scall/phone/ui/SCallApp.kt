@@ -658,6 +658,21 @@ internal fun SCallApp(
                             }
                         },
                         actions = {
+                            // A discreet warning on every main tab, without moving
+                            // the keypad or disturbing the main-screen layout.
+                            // The user can correct notifications/FSI in Settings.
+                            val callAlertState = remember(refreshVersion, localRefresh, page) {
+                                IncomingCallVisibility.access(context, repository.isDefaultDialer())
+                            }
+                            if (callAlertState != IncomingCallAccess.READY) {
+                                IconButton(onClick = { navigateTo("Settings") }) {
+                                    Icon(
+                                        Icons.Default.NotificationsOff,
+                                        contentDescription = "Incoming call alerts need setup",
+                                        tint = scheme.error
+                                    )
+                                }
+                            }
                             IconButton(onClick = { localRefresh++ }) {
                                 Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                             }

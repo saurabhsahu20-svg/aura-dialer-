@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
 import com.scall.phone.data.PhoneRepository
+import com.scall.phone.telecom.IncomingCallVisibility
 import com.scall.phone.ui.SCallApp
 import com.scall.phone.ui.nextExternalDialRequestId
 
@@ -37,6 +38,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         repository = PhoneRepository(applicationContext)
+        // Make incoming-call alert channel configurable even before the first
+        // ringing call. Never alter a channel whose importance user customized.
+        try {
+            IncomingCallVisibility.ensureChannel(this)
+        } catch (error: RuntimeException) {
+            android.util.Log.w("SCall", "Incoming call alert channel setup unavailable", error)
+        }
         readDialIntent(intent)
         setContent {
             SCallApp(

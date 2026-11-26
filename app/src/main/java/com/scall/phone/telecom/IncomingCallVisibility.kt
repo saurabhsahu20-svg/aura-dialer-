@@ -1,6 +1,8 @@
 package com.scall.phone.telecom
 
 import android.Manifest
+import android.app.Notification
+import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
@@ -10,6 +12,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import com.scall.phone.R
 
 /**
  * Android 14+ allows users to disable Full Screen Intent independently of
@@ -39,6 +42,29 @@ internal fun resolveIncomingCallAccess(
 internal object IncomingCallVisibility {
     const val CHANNEL_ID = "s_call_phone_calls"
 
+    /** Create the notification channel on initial app launch, not just when
+     * Telecom first binds to the service. This makes disabled call alerts
+     * visible in Settings before the next missed call.
+     * Existing user's channel importance is never raised or overridden.
+     */
+    fun ensureChannel(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        if (manager.getNotificationChannel(CHANNEL_ID) != null) return
+        manager.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_ID,
+                context.getString(R.string.incoming_calls_channel),
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = context.getString(R.string.incoming_calls_description)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                setSound(null, null)
+                enableVibration(false)
+            }
+        )
+    }
+
     fun access(context: Context, defaultDialer: Boolean): IncomingCallAccess {
         val notificationManager = context.getSystemService(NotificationManager::class.java)
         val permitted = Build.VERSION.SDK_INT < 33 ||
@@ -48,8 +74,9 @@ internal object IncomingCallVisibility {
             .areNotificationsEnabled()
         // Android 6 and 7 do not have notification channels at all.
         val channelAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
-            notificationManager.getNotificationChannel(CHANNEL_ID)?.importance !=
-            NotificationManager.IMPORTANCE_NONE
+            (notificationManager.getNotificationChannel(CHANNEL_ID)?.importance?.let {
+                it != NotificationManager.IMPORTANCE_NONE
+            } == true)
         val fullScreenAllowed = Build.VERSION.SDK_INT < 34 ||
             notificationManager.canUseFullScreenIntent()
         return resolveIncomingCallAccess(
