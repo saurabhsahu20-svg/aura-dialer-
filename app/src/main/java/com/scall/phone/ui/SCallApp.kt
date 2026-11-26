@@ -78,6 +78,7 @@ internal fun SCallApp(
     externalDialNumber: String,
     externalDialRequestId: Int,
     refreshVersion: Int,
+    callLogRefreshVersion: Int,
     requestDialerRole: () -> Unit,
     requestPermissions: () -> Unit
 ) {
@@ -167,6 +168,31 @@ internal fun SCallApp(
         // Only rows actually loaded at the moment of viewing are acknowledged.
         // New calls arriving afterwards will still appear in the badge.
         missedSeenThrough = missedBadgeStore.markViewed(recents)
+    }
+
+    // A live Call Log observer updates the missed-call badge without reloading
+    // the entire contacts database on every provider notification.
+    LaunchedEffect(callLogRefreshVersion) {
+        if (callLogRefreshVersion > 0 && loadedOnce && repository.hasLogsPermission()) {
+            try {
+                val latestCalls = repository.recentCalls(contacts)
+                missedSeenThrough = missedBadgeStore.initialize(latestCalls)
+                recents = latestCalls
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                android.util.Log.w("SCall", "Call history background refresh unavailable", error)
+            }
+        }
+    }
+
+    // Opening the Recents page counts as viewing missed calls. Keep the new
+    // badge briefly readable, then acknowledge only the currently loaded calls.
+    LaunchedEffect(page, newMissedCount, loadedOnce) {
+        if (page == "Recents" && loadedOnce && newMissedCount > 0) {
+            kotlinx.coroutines.delay(850)
+            if (page == "Recents") acknowledgeMissedCalls()
+        }
     }
 
     fun navigateTo(destination: String) {
