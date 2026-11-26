@@ -16,7 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.scall.phone.data.CallHistoryStore
 import com.scall.phone.data.RecentEntry
 import com.scall.phone.data.contactLookupKey
 import java.text.SimpleDateFormat
@@ -46,6 +45,13 @@ internal fun estimatedCallEndMillis(timestamp: Long, seconds: Long): Long? {
     val delta = seconds * 1000L
     if (timestamp > Long.MAX_VALUE - delta) return null
     return timestamp + delta
+}
+
+internal fun callEventTimeLabel(type: Int): String = when (type) {
+    CallLog.Calls.INCOMING_TYPE -> "Incoming call recorded at"
+    CallLog.Calls.OUTGOING_TYPE -> "Outgoing call recorded at"
+    CallLog.Calls.MISSED_TYPE -> "Missed call recorded at"
+    else -> "Call recorded at"
 }
 
 internal fun preciseCallTypeLabel(type: Int): String = when (type) {
@@ -155,7 +161,7 @@ internal fun CallDetailsScreen(
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold)
                     }
-                    CallDetailsField("Date and time", formatCallLogDateTime(selected.timestamp, locale, zone))
+                    CallDetailsField(callEventTimeLabel(selected.type), formatCallLogDateTime(selected.timestamp, locale, zone))
                     CallDetailsField("Call duration",
                         if (selected.duration <= 0L) "0 seconds / not recorded"
                         else formatCallDuration(selected.duration))
