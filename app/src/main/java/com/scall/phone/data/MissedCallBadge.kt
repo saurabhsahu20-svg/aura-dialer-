@@ -17,12 +17,35 @@ internal fun latestMissedCallCursor(calls: List<RecentEntry>): MissedCallCursor?
         .map { MissedCallCursor(it.timestamp, it.id) }
         .maxWithOrNull(compareBy<MissedCallCursor>({ it.timestamp }, { it.id }))
 
-internal fun countNewMissedCalls(calls: List<RecentEntry>, seen: MissedCallCursor): Int =
-    calls.count { call ->
-        call.type == CallLog.Calls.MISSED_TYPE &&
-            (call.timestamp > seen.timestamp ||
-                (call.timestamp == seen.timestamp && call.id > seen.id))
+/**
+ * Count distinct NEW missed-call events, not provider refreshes or duplicated
+ * call-log rows. A few OEMs can insert the same missed event twice within a
+ * second, sometimes under different _IDs. Keep all rows in History, but count
+ * a matching number within 1500ms once for the new-call badge.
+ */
+internal fun countNewMissedCalls(calls: List<RecentEntry>, seen: MissedCallCursor): Int {
+    val uniqueIds = HashSet<Long>()
+    val latestByNumber = HashMap<String, Long>()
+    var count = 0
+    val missed = calls.asSequence()
+        .filter { it.type == CallLog.Calls.MISSED_TYPE &&
+            (it.timestamp > seen.timestamp ||
+                (it.timestamp == seen.timestamp && it.id > seen.id)) }
+        .sortedWith(compareBy<RecentEntry>({ it.timestamp }, { it.id }))
+    for (entry in missed) {
+        if (!uniqueIds.add(entry.id)) continue
+        // Unknown/private numbers must not collapse unrelated callers together.
+        val digits = entry.number.filter(Char::isDigit)
+        val key = if (digits.isNotEmpty()) digits.takeLast(10)
+            else "private:${entry.id}"
+        val previous = latestByNumber[key]
+        if (previous == null || entry.timestamp - previous > 1500L) {
+            count++
+        }
+        latestByNumber[key] = entry.timestamp
     }
+    return count
+}
 
 /**
  * A private, device-local viewed marker; never deletes or alters call-log rows.
