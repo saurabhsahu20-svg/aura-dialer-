@@ -36,8 +36,8 @@ internal fun countNewMissedCalls(calls: List<RecentEntry>, seen: MissedCallCurso
         if (!uniqueIds.add(entry.id)) continue
         // Unknown/private numbers must not collapse unrelated callers together.
         val digits = entry.number.filter(Char::isDigit)
-        val key = if (digits.isNotEmpty()) digits.takeLast(10)
-            else "private:${entry.id}"
+        val key = contactLookupKey(entry.number)
+            ?: if (digits.isNotEmpty()) "FULL:$digits" else "private:${entry.id}"
         val previous = latestByNumber[key]
         if (previous == null || entry.timestamp - previous > 1500L) {
             count++
