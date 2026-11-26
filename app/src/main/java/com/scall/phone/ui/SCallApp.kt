@@ -238,7 +238,9 @@ internal fun SCallApp(
             }
             query.isNotBlank() -> query = ""
             else -> {
-                val (previous, remaining) = popPageHistory(pageHistory)
+                // Bottom tabs are siblings: Back once returns directly to
+                // Recents, never replays Contacts -> Favorites -> Keypad.
+                val (previous, remaining) = backPage(pageHistory, page)
                 pageHistory = remaining
                 page = previous
                 query = ""
@@ -246,12 +248,12 @@ internal fun SCallApp(
         }
     }
 
-    // Android system Back and gesture navigation mirror the in-app Back arrow.
-    // Only the root Recents page can exit S call; the keypad never closes the app.
+    // Android system Back and gesture Back share the same behavior.
+    // No primary-tab history: Recents is the sole exit destination.
     BackHandler(
         enabled = photoEditor != null || activeContact != null ||
             historySelectionMode || query.isNotBlank() ||
-            page != "Recents" || pageHistory.isNotEmpty()
+            page != "Recents"
     ) {
         navigateBack()
     }
@@ -1680,7 +1682,7 @@ private fun SettingsScreen(
             }
         }
         item {
-            Text("S call · v1.9.35\nBeautiful calls. Simple experience.",
+            Text("S call · v1.9.36\nBeautiful calls. Simple experience.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
