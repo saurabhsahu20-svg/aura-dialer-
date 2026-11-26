@@ -434,7 +434,8 @@ internal fun KeypadScreen(
     onChat: (String, ExternalChatApp) -> Unit,
     onSimSettings: () -> Unit,
     onBack: () -> Unit,
-    simLabel: String
+    simLabel: String,
+    oneHandMode: String = "Off"
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -633,16 +634,22 @@ internal fun KeypadScreen(
         DirectChatActions(number = value, onLaunch = onChat,
             modifier = Modifier.padding(vertical = 4.dp))
         BoxWithConstraints(
-            modifier = Modifier.weight(1f).fillMaxWidth()
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentAlignment = when (oneHandMode) {
+                "Left" -> Alignment.TopStart
+                "Right" -> Alignment.TopEnd
+                else -> Alignment.TopCenter
+            }
         ) {
+            val widthFactor = if (oneHandMode == "Left" || oneHandMode == "Right") 0.82f else 1f
             // Reserve a fixed keypad region independent of search results.
             // All digits remain in the same place while the number changes.
             val rowHeight = stableDialRowHeight(maxHeight.value).dp
             val keypadMustScroll = maxHeight < rowHeight * 4
             Column(
                 modifier = if (keypadMustScroll)
-                    Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-                else Modifier.fillMaxSize(),
+                    Modifier.fillMaxWidth(widthFactor).verticalScroll(rememberScrollState())
+                else Modifier.fillMaxWidth(widthFactor).fillMaxHeight(),
                 verticalArrangement = if (keypadMustScroll) Arrangement.Top
                     else Arrangement.SpaceEvenly
             ) {

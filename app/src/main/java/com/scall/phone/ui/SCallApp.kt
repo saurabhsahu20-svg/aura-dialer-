@@ -91,6 +91,9 @@ internal fun SCallApp(
     val actionScope = rememberCoroutineScope()
     var theme by remember { mutableStateOf(prefs.getString("theme", "System") ?: "System") }
     var enableSwipes by remember { mutableStateOf(prefs.getBoolean("swipe_call", true)) }
+    var flipToSilence by remember { mutableStateOf(prefs.getBoolean("flip_silence", false)) }
+    var announceCaller by remember { mutableStateOf(prefs.getBoolean("announce_caller", false)) }
+    var oneHandMode by remember { mutableStateOf(prefs.getString("one_hand_mode", "Off") ?: "Off") }
     var page by rememberSaveable { mutableStateOf("Recents") }
     var pageHistory by rememberSaveable { mutableStateOf(listOf<String>()) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -802,6 +805,21 @@ internal fun SCallApp(
                         onThemeChanged = { theme = it; prefs.edit().putString("theme", it).apply() },
                         swipeEnabled = enableSwipes,
                         onSwipeEnabledChanged = { enableSwipes = it; prefs.edit().putBoolean("swipe_call", it).apply() },
+                        flipToSilence = flipToSilence,
+                        onFlipToSilenceChanged = {
+                            flipToSilence = it
+                            prefs.edit().putBoolean("flip_silence", it).apply()
+                        },
+                        announceCaller = announceCaller,
+                        onAnnounceCallerChanged = {
+                            announceCaller = it
+                            prefs.edit().putBoolean("announce_caller", it).apply()
+                        },
+                        oneHandMode = oneHandMode,
+                        onOneHandModeChanged = {
+                            oneHandMode = it
+                            prefs.edit().putString("one_hand_mode", it).apply()
+                        },
                         defaultDialer = repository.isDefaultDialer(),
                         contactsGranted = repository.hasContactsPermission(),
                         logsGranted = repository.hasLogsPermission(),
@@ -858,7 +876,8 @@ internal fun SCallApp(
                                 onChat = ::openExternalChat,
                                 onSimSettings = { navigateTo("SIM Manager") },
                                 onBack = { navigateBack() },
-                                simLabel = label
+                                simLabel = label,
+                                oneHandMode = oneHandMode
                             )
                         }
                     }
@@ -1441,6 +1460,9 @@ private fun PhotoEditorScreen(contact: ContactEntry, photo: String?, onPick: () 
 private fun SettingsScreen(
     theme: String, onThemeChanged: (String) -> Unit,
     swipeEnabled: Boolean, onSwipeEnabledChanged: (Boolean) -> Unit,
+    flipToSilence: Boolean, onFlipToSilenceChanged: (Boolean) -> Unit,
+    announceCaller: Boolean, onAnnounceCallerChanged: (Boolean) -> Unit,
+    oneHandMode: String, onOneHandModeChanged: (String) -> Unit,
     defaultDialer: Boolean, contactsGranted: Boolean, logsGranted: Boolean,
     requestDialerRole: () -> Unit, requestPermissions: () -> Unit,
     onSimSettings: () -> Unit,
@@ -1448,6 +1470,7 @@ private fun SettingsScreen(
     onFixIncomingCallDisplay: () -> Unit
 ) {
     var themeMenu by remember { mutableStateOf(false) }
+    var oneHandMenu by remember { mutableStateOf(false) }
     val audioCapabilities = remember { AudioCapabilityInspector.inspect() }
     LazyColumn(contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1573,6 +1596,57 @@ private fun SettingsScreen(
         item {
             SettingsCard {
                 ListItem(
+                    leadingContent = { Icon(Icons.Default.VolumeOff, null) },
+                    headlineContent = { Text("Flip to silence incoming calls") },
+                    supportingContent = {
+                        Text("Turn the screen face down for a moment to silence only the ringtone. The call stays incoming.")
+                    },
+                    trailingContent = {
+                        Switch(checked = flipToSilence, onCheckedChange = onFlipToSilenceChanged)
+                    }
+                )
+            }
+        }
+        item {
+            SettingsCard {
+                ListItem(
+                    leadingContent = { Icon(Icons.Default.RecordVoiceOver, null) },
+                    headlineContent = { Text("Announce saved caller name") },
+                    supportingContent = {
+                        Text("Optional voice announcement using the phone's Text-to-Speech engine. Only saved names; off by default.")
+                    },
+                    trailingContent = {
+                        Switch(checked = announceCaller, onCheckedChange = onAnnounceCallerChanged)
+                    }
+                )
+            }
+        }
+        item {
+            SettingsCard {
+                ListItem(
+                    leadingContent = { Icon(Icons.Default.Dialpad, null) },
+                    headlineContent = { Text("One-handed keypad") },
+                    supportingContent = { Text("$oneHandMode • Compact number keys for easier reach") },
+                    trailingContent = {
+                        Box {
+                            TextButton(onClick = { oneHandMenu = true }) { Text("Change") }
+                            DropdownMenu(expanded = oneHandMenu,
+                                onDismissRequest = { oneHandMenu = false }) {
+                                listOf("Off", "Left", "Right").forEach { option ->
+                                    DropdownMenuItem(text = { Text(option) }, onClick = {
+                                        oneHandMenu = false
+                                        onOneHandModeChanged(option)
+                                    })
+                                }
+                            }
+                        }
+                    }
+                )
+            }
+        }
+        item {
+            SettingsCard {
+                ListItem(
                     leadingContent = { Icon(Icons.Default.SimCard, null) },
                     headlineContent = { Text("SIM & network preferences") },
                     supportingContent = { Text("SIM 1 / SIM 2 · Calls · SMS · Mobile data") },
@@ -1606,7 +1680,7 @@ private fun SettingsScreen(
             }
         }
         item {
-            Text("S call · v1.8.2\nBeautiful calls. Simple experience.",
+            Text("S call · v1.9.35\nBeautiful calls. Simple experience.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,

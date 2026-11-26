@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.telecom.TelecomManager
 import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.CallEndpoint
@@ -48,6 +49,24 @@ class SCallInCallService : InCallService() {
     }
 
     private var lastPostedAlert: CallAlertSignature? = null
+    private val callerAnnouncer by lazy { CallerNameAnnouncer(applicationContext) }
+    private val flipToSilence by lazy {
+        FlipToSilenceController(this) {
+            callerAnnouncer.silenceSpeech()
+            silenceCurrentRingtoneIfDefaultDialer()
+        }
+    }
+
+    // Android explicitly permits TelecomManager.silenceRinger() to the
+    // selected default dialer as an alternative to MODIFY_PHONE_STATE.
+    // Lint cannot infer this role exemption, so suppress ONLY that check
+    // on this guarded call, never request the protected permission.
+    @android.annotation.SuppressLint("MissingPermission")
+    private fun silenceCurrentRingtoneIfDefaultDialer() {
+        val telecom = getSystemService(TELECOM_SERVICE) as? TelecomManager ?: return
+        if (telecom.defaultDialerPackage != packageName) return
+        telecom.silenceRinger()
+    }
     private val callbackByCall = linkedMapOf<Call, Call.Callback>()
     private val stateCheckHandler = Handler(Looper.getMainLooper())
     private val lookupScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -134,6 +153,7 @@ class SCallInCallService : InCallService() {
             val callback = object : Call.Callback() {
                 override fun onStateChanged(call: Call, state: Int) {
                     if (state == Call.STATE_RINGING) lookupIncomingContactName(call)
+                    else callerAnnouncer.stopForCall(call)
                     updateCallNotification()
                 }
 
@@ -154,6 +174,7 @@ class SCallInCallService : InCallService() {
     }
 
     override fun onCallRemoved(call: Call) {
+        callerAnnouncer.onCallRemoved(call)
         contactNames.remove(call)
         pendingContactLookups.remove(call)
         callbackByCall.remove(call)?.let { callback ->
@@ -227,6 +248,8 @@ class SCallInCallService : InCallService() {
         contactNames.clear()
         pendingContactLookups.clear()
         lookupScope.cancel()
+        callerAnnouncer.close()
+        flipToSilence.stop()
         stateCheckHandler.removeCallbacksAndMessages(null)
         try {
             CallBridge.unbind(this)
@@ -250,17 +273,29 @@ class SCallInCallService : InCallService() {
         val calls = callbackByCall.keys.toList()
         val index = primaryCallNotificationIndex(calls.map { it.state })
         if (index == null) {
+            flipToSilence.stop()
             // Do not post an "ongoing" notification for STATE_NEW: a later
             // update to RINGING might not trigger a fresh full-screen alert.
             // Likewise do not let a disconnected callback hide a live call.
             cancelCallNotifications()
             return
         }
+        flipToSilence.update(
+            calls[index],
+            getSharedPreferences("s_call_settings", MODE_PRIVATE)
+                .getBoolean("flip_silence", false)
+        )
         showCallNotification(calls[index])
     }
 
     private fun showCallNotification(call: Call) {
         val incoming = call.state == Call.STATE_RINGING
+        callerAnnouncer.onIncoming(
+            call,
+            contactNames[call],
+            getSharedPreferences("s_call_settings", MODE_PRIVATE)
+                .getBoolean("announce_caller", false)
+        )
         val caller = contactNames[call]
             ?: call.details.callerDisplayName?.toString()
                 ?.takeIf { it.isNotBlank() }
