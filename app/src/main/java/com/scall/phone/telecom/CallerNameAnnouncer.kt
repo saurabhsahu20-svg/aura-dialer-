@@ -66,6 +66,11 @@ internal class CallerNameAnnouncer(private val context: Context) {
         }
     }
 
+    fun silenceSpeech() {
+        waiting = null
+        try { engine?.stop() } catch (_: RuntimeException) {}
+    }
+
     fun stopForCall(call: Call) {
         if (waiting?.first === call) waiting = null
         try { engine?.stop() } catch (_: RuntimeException) {}
