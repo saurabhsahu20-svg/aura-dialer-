@@ -102,8 +102,13 @@ internal fun SCallApp(
     var contacts by remember { mutableStateOf<List<ContactEntry>>(emptyList()) }
     var recents by remember { mutableStateOf<List<RecentEntry>>(emptyList()) }
     var missedSeenThrough by remember { mutableStateOf<MissedCallCursor?>(null) }
-    val newMissedCount = remember(recents, missedSeenThrough) {
-        missedSeenThrough?.let { countNewMissedCalls(recents, it) } ?: 0
+    // Large call books must never sort/scan missed-call events on the UI thread.
+    // Cancel older calculations when the provider delivers a newer snapshot.
+    var newMissedCount by remember { mutableIntStateOf(0) }
+    LaunchedEffect(recents, missedSeenThrough) {
+        val marker = missedSeenThrough
+        newMissedCount = if (marker == null) 0 else
+            withContext(Dispatchers.Default) { countNewMissedCalls(recents, marker) }
     }
     var editingHistory by remember { mutableStateOf<RecentEntry?>(null) }
     var historyTitle by rememberSaveable { mutableStateOf("") }
