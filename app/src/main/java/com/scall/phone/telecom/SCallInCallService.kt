@@ -51,11 +51,18 @@ class SCallInCallService : InCallService() {
     private var lastPostedAlert: CallAlertSignature? = null
     private val callerAnnouncer by lazy { CallerNameAnnouncer(applicationContext) }
     private val flipToSilence by lazy {
-        FlipToSilenceController(this) {
-            val telecom = getSystemService(TELECOM_SERVICE) as? TelecomManager
-            // Only the selected/default Phone app may silence Telecom's ringtone.
-            telecom?.silenceRinger()
-        }
+        FlipToSilenceController(this) { silenceCurrentRingtoneIfDefaultDialer() }
+    }
+
+    // Android explicitly permits TelecomManager.silenceRinger() to the
+    // selected default dialer as an alternative to MODIFY_PHONE_STATE.
+    // Lint cannot infer this role exemption, so suppress ONLY that check
+    // on this guarded call, never request the protected permission.
+    @android.annotation.SuppressLint("MissingPermission")
+    private fun silenceCurrentRingtoneIfDefaultDialer() {
+        val telecom = getSystemService(TELECOM_SERVICE) as? TelecomManager ?: return
+        if (telecom.defaultDialerPackage != packageName) return
+        telecom.silenceRinger()
     }
     private val callbackByCall = linkedMapOf<Call, Call.Callback>()
     private val stateCheckHandler = Handler(Looper.getMainLooper())
