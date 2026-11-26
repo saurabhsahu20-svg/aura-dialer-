@@ -8,6 +8,8 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.CallEndpoint
@@ -28,10 +30,32 @@ import com.scall.phone.R
  */
 class SCallInCallService : InCallService() {
     companion object {
-        private const val NOTIFICATION_ID = 4102
+        private const val INCOMING_NOTIFICATION_ID = 4102
+        private const val ONGOING_NOTIFICATION_ID = 4103
     }
 
     private val callbackByCall = linkedMapOf<Call, Call.Callback>()
+    private val stateCheckHandler = Handler(Looper.getMainLooper())
+
+    // Some OEMs deliver onCallAdded before the final RINGING state and do
+    // not immediately dispatch a state change callback. Retry briefly while
+    // the original call is still owned by Android Telecom.
+    private fun recheckIncomingState(call: Call) {
+        for (delayMillis in listOf(120L, 350L, 800L, 1500L)) {
+            stateCheckHandler.postDelayed({
+                if (callbackByCall.containsKey(call)) {
+                    CallBridge.refreshFromTelecom()
+                    updateCallNotification()
+                }
+            }, delayMillis)
+        }
+    }
+
+    private fun cancelCallNotifications() {
+        val notifications = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        notifications.cancel(INCOMING_NOTIFICATION_ID)
+        notifications.cancel(ONGOING_NOTIFICATION_ID)
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -89,6 +113,7 @@ class SCallInCallService : InCallService() {
             }
         }
         updateCallNotification()
+        recheckIncomingState(call)
     }
 
     override fun onCallRemoved(call: Call) {
@@ -160,9 +185,10 @@ class SCallInCallService : InCallService() {
             }
         }
         callbackByCall.clear()
+        stateCheckHandler.removeCallbacksAndMessages(null)
         try {
             CallBridge.unbind(this)
-            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIFICATION_ID)
+            cancelCallNotifications()
         } catch (error: RuntimeException) {
             android.util.Log.w("SCallInCallService", "Call service cleanup failed", error)
         }
@@ -179,14 +205,16 @@ class SCallInCallService : InCallService() {
     }
 
     private fun updateCallNotificationSafely() {
-        val primary = callbackByCall.keys.firstOrNull { it.state == Call.STATE_RINGING }
-            ?: callbackByCall.keys.firstOrNull { it.state == Call.STATE_ACTIVE }
-            ?: callbackByCall.keys.firstOrNull()
-        if (primary == null || primary.state == Call.STATE_DISCONNECTED) {
-            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIFICATION_ID)
+        val calls = callbackByCall.keys.toList()
+        val index = primaryCallNotificationIndex(calls.map { it.state })
+        if (index == null) {
+            // Do not post an "ongoing" notification for STATE_NEW: a later
+            // update to RINGING might not trigger a fresh full-screen alert.
+            // Likewise do not let a disconnected callback hide a live call.
+            cancelCallNotifications()
             return
         }
-        showCallNotification(primary)
+        showCallNotification(calls[index])
     }
 
     private fun showCallNotification(call: Call) {
@@ -221,7 +249,10 @@ class SCallInCallService : InCallService() {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(uiPending)
             .setOngoing(true)
-            .setOnlyAlertOnce(!incoming)
+            // New incoming calls get their own notification ID, so their
+            // first RINGING notification is a fresh heads-up / FSI.
+            // State/name refreshes must not restart repeated alerts.
+            .setOnlyAlertOnce(true)
             .setAutoCancel(false)
 
         if (incoming) {
@@ -242,11 +273,21 @@ class SCallInCallService : InCallService() {
             PackageManager.PERMISSION_GRANTED
         if (permissionGranted) {
             try {
-                (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
-                    .notify(NOTIFICATION_ID, builder.build())
-            } catch (_: SecurityException) {
-                // Surface permissions/status in the app's Incoming call display settings.
+                val notifications = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+                val notificationId = if (incoming) INCOMING_NOTIFICATION_ID
+                    else ONGOING_NOTIFICATION_ID
+                val previousId = if (incoming) ONGOING_NOTIFICATION_ID
+                    else INCOMING_NOTIFICATION_ID
+                // Switching ongoing -> ringing must create a fresh incoming
+                // notification, instead of mutating an already-visible one.
+                notifications.cancel(previousId)
+                notifications.notify(notificationId, builder.build())
+            } catch (error: SecurityException) {
+                android.util.Log.w("SCallInCallService", "Call alerts permission blocked", error)
             }
+        } else {
+            android.util.Log.w("SCallInCallService",
+                "Incoming call not shown: enable Notifications and Full-screen alerts for S Caller")
         }
     }
 
