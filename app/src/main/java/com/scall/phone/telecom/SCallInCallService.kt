@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.telecom.TelecomManager
 import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.CallEndpoint
@@ -48,6 +49,13 @@ class SCallInCallService : InCallService() {
     }
 
     private var lastPostedAlert: CallAlertSignature? = null
+    private val flipToSilence by lazy {
+        FlipToSilenceController(this) {
+            val telecom = getSystemService(TELECOM_SERVICE) as? TelecomManager
+            // Only the selected/default Phone app may silence Telecom's ringtone.
+            telecom?.silenceRinger()
+        }
+    }
     private val callbackByCall = linkedMapOf<Call, Call.Callback>()
     private val stateCheckHandler = Handler(Looper.getMainLooper())
     private val lookupScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -227,6 +235,7 @@ class SCallInCallService : InCallService() {
         contactNames.clear()
         pendingContactLookups.clear()
         lookupScope.cancel()
+        flipToSilence.stop()
         stateCheckHandler.removeCallbacksAndMessages(null)
         try {
             CallBridge.unbind(this)
@@ -250,12 +259,18 @@ class SCallInCallService : InCallService() {
         val calls = callbackByCall.keys.toList()
         val index = primaryCallNotificationIndex(calls.map { it.state })
         if (index == null) {
+            flipToSilence.stop()
             // Do not post an "ongoing" notification for STATE_NEW: a later
             // update to RINGING might not trigger a fresh full-screen alert.
             // Likewise do not let a disconnected callback hide a live call.
             cancelCallNotifications()
             return
         }
+        flipToSilence.update(
+            calls[index],
+            getSharedPreferences("s_call_settings", MODE_PRIVATE)
+                .getBoolean("flip_silence", false)
+        )
         showCallNotification(calls[index])
     }
 
