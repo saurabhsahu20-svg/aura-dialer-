@@ -49,6 +49,7 @@ class SCallInCallService : InCallService() {
     }
 
     private var lastPostedAlert: CallAlertSignature? = null
+    private val callerAnnouncer by lazy { CallerNameAnnouncer(applicationContext) }
     private val flipToSilence by lazy {
         FlipToSilenceController(this) {
             val telecom = getSystemService(TELECOM_SERVICE) as? TelecomManager
@@ -142,6 +143,7 @@ class SCallInCallService : InCallService() {
             val callback = object : Call.Callback() {
                 override fun onStateChanged(call: Call, state: Int) {
                     if (state == Call.STATE_RINGING) lookupIncomingContactName(call)
+                    else callerAnnouncer.stopForCall(call)
                     updateCallNotification()
                 }
 
@@ -162,6 +164,7 @@ class SCallInCallService : InCallService() {
     }
 
     override fun onCallRemoved(call: Call) {
+        callerAnnouncer.onCallRemoved(call)
         contactNames.remove(call)
         pendingContactLookups.remove(call)
         callbackByCall.remove(call)?.let { callback ->
@@ -235,6 +238,7 @@ class SCallInCallService : InCallService() {
         contactNames.clear()
         pendingContactLookups.clear()
         lookupScope.cancel()
+        callerAnnouncer.close()
         flipToSilence.stop()
         stateCheckHandler.removeCallbacksAndMessages(null)
         try {
@@ -276,6 +280,12 @@ class SCallInCallService : InCallService() {
 
     private fun showCallNotification(call: Call) {
         val incoming = call.state == Call.STATE_RINGING
+        callerAnnouncer.onIncoming(
+            call,
+            contactNames[call],
+            getSharedPreferences("s_call_settings", MODE_PRIVATE)
+                .getBoolean("announce_caller", false)
+        )
         val caller = contactNames[call]
             ?: call.details.callerDisplayName?.toString()
                 ?.takeIf { it.isNotBlank() }
