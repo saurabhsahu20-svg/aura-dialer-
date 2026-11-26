@@ -167,7 +167,23 @@ internal fun SCallApp(
         if (!loadedOnce) return
         // Only rows actually loaded at the moment of viewing are acknowledged.
         // New calls arriving afterwards will still appear in the badge.
+        val previouslySeen = missedSeenThrough
+        val newlyViewedIds = if (previouslySeen == null) emptySet() else recents
+            .asSequence()
+            .filter {
+                it.type == android.provider.CallLog.Calls.MISSED_TYPE &&
+                    (it.timestamp > previouslySeen.timestamp ||
+                        (it.timestamp == previouslySeen.timestamp &&
+                            it.id > previouslySeen.id))
+            }
+            .map { it.id }.toSet()
         missedSeenThrough = missedBadgeStore.markViewed(recents)
+        if (newlyViewedIds.isNotEmpty()) {
+            // Run the provider update in IO; scrolling and taps stay responsive.
+            actionScope.launch {
+                repository.markMissedCallsRead(newlyViewedIds)
+            }
+        }
     }
 
     // A live Call Log observer updates the missed-call badge without reloading
