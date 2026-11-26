@@ -78,6 +78,7 @@ internal fun SCallApp(
     externalDialNumber: String,
     externalDialRequestId: Int,
     refreshVersion: Int,
+    callLogRefreshVersion: Int,
     requestDialerRole: () -> Unit,
     requestPermissions: () -> Unit
 ) {
@@ -101,8 +102,13 @@ internal fun SCallApp(
     var contacts by remember { mutableStateOf<List<ContactEntry>>(emptyList()) }
     var recents by remember { mutableStateOf<List<RecentEntry>>(emptyList()) }
     var missedSeenThrough by remember { mutableStateOf<MissedCallCursor?>(null) }
-    val newMissedCount = remember(recents, missedSeenThrough) {
-        missedSeenThrough?.let { countNewMissedCalls(recents, it) } ?: 0
+    // Large call books must never sort/scan missed-call events on the UI thread.
+    // Cancel older calculations when the provider delivers a newer snapshot.
+    var newMissedCount by remember { mutableIntStateOf(0) }
+    LaunchedEffect(recents, missedSeenThrough) {
+        val marker = missedSeenThrough
+        newMissedCount = if (marker == null) 0 else
+            withContext(Dispatchers.Default) { countNewMissedCalls(recents, marker) }
     }
     var editingHistory by remember { mutableStateOf<RecentEntry?>(null) }
     var historyTitle by rememberSaveable { mutableStateOf("") }
@@ -166,7 +172,48 @@ internal fun SCallApp(
         if (!loadedOnce) return
         // Only rows actually loaded at the moment of viewing are acknowledged.
         // New calls arriving afterwards will still appear in the badge.
+        val previouslySeen = missedSeenThrough
+        val newlyViewedIds = if (previouslySeen == null) emptySet() else recents
+            .asSequence()
+            .filter {
+                it.type == android.provider.CallLog.Calls.MISSED_TYPE &&
+                    (it.timestamp > previouslySeen.timestamp ||
+                        (it.timestamp == previouslySeen.timestamp &&
+                            it.id > previouslySeen.id))
+            }
+            .map { it.id }.toSet()
         missedSeenThrough = missedBadgeStore.markViewed(recents)
+        if (newlyViewedIds.isNotEmpty()) {
+            // Run the provider update in IO; scrolling and taps stay responsive.
+            actionScope.launch {
+                repository.markMissedCallsRead(newlyViewedIds)
+            }
+        }
+    }
+
+    // A live Call Log observer updates the missed-call badge without reloading
+    // the entire contacts database on every provider notification.
+    LaunchedEffect(callLogRefreshVersion) {
+        if (callLogRefreshVersion > 0 && loadedOnce && repository.hasLogsPermission()) {
+            try {
+                val latestCalls = repository.recentCalls(contacts)
+                missedSeenThrough = missedBadgeStore.initialize(latestCalls)
+                recents = latestCalls
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                android.util.Log.w("SCall", "Call history background refresh unavailable", error)
+            }
+        }
+    }
+
+    // Opening the Recents page counts as viewing missed calls. Keep the new
+    // badge briefly readable, then acknowledge only the currently loaded calls.
+    LaunchedEffect(page, newMissedCount, loadedOnce) {
+        if (page == "Recents" && loadedOnce && newMissedCount > 0) {
+            kotlinx.coroutines.delay(850)
+            if (page == "Recents") acknowledgeMissedCalls()
+        }
     }
 
     fun navigateTo(destination: String) {

@@ -3,6 +3,11 @@ package com.scall.phone
 import android.Manifest
 import android.app.role.RoleManager
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.provider.CallLog
 import android.os.Build
 import android.os.Bundle
 import android.telecom.TelecomManager
@@ -24,6 +29,32 @@ class MainActivity : ComponentActivity() {
     private var dialNumber by mutableStateOf("")
     private var dialIntentVersion by mutableIntStateOf(0)
     private var refreshVersion by mutableIntStateOf(0)
+    private var callLogRefreshVersion by mutableIntStateOf(0)
+    private val historyRefreshHandler = Handler(Looper.getMainLooper())
+    private val historyRefresh = Runnable { callLogRefreshVersion++ }
+    private var observingCallLog = false
+    private val callLogObserver = object : ContentObserver(historyRefreshHandler) {
+        override fun onChange(selfChange: Boolean) {
+            // CallLog providers may dispatch several events for one insertion.
+            // One debounced query prevents duplicate alerts and UI jank.
+            historyRefreshHandler.removeCallbacks(historyRefresh)
+            historyRefreshHandler.postDelayed(historyRefresh, 400L)
+        }
+    }
+
+    private fun observeCallLogIfPermitted() {
+        if (observingCallLog ||
+            checkSelfPermission(Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED
+        ) return
+        try {
+            contentResolver.registerContentObserver(
+                CallLog.Calls.CONTENT_URI, true, callLogObserver
+            )
+            observingCallLog = true
+        } catch (error: RuntimeException) {
+            android.util.Log.w("SCall", "Call history observer unavailable", error)
+        }
+    }
     private var lastResumeAt = 0L
 
     private val roleLauncher = registerForActivityResult(
@@ -32,7 +63,10 @@ class MainActivity : ComponentActivity() {
 
     private val permissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { refreshVersion++ }
+    ) {
+        refreshVersion++
+        observeCallLogIfPermitted()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,6 +86,7 @@ class MainActivity : ComponentActivity() {
                 externalDialNumber = dialNumber,
                 externalDialRequestId = dialIntentVersion,
                 refreshVersion = refreshVersion,
+                callLogRefreshVersion = callLogRefreshVersion,
                 requestDialerRole = ::requestDialerRole,
                 requestPermissions = ::requestPermissions
             )
@@ -66,6 +101,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        observeCallLogIfPermitted()
         val now = android.os.SystemClock.elapsedRealtime()
         // onCreate already loads records. Do not fire a duplicate provider scan
         // when Activity immediately enters onResume, or on quick app transitions.
@@ -73,6 +109,15 @@ class MainActivity : ComponentActivity() {
             refreshVersion++
         }
         lastResumeAt = now
+    }
+
+    override fun onStop() {
+        historyRefreshHandler.removeCallbacks(historyRefresh)
+        if (observingCallLog) {
+            runCatching { contentResolver.unregisterContentObserver(callLogObserver) }
+            observingCallLog = false
+        }
+        super.onStop()
     }
 
     private fun readDialIntent(intent: Intent?) {

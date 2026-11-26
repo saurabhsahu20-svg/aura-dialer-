@@ -34,12 +34,20 @@ import kotlinx.coroutines.launch
  * IMPORTANT: onCallAdded can arrive BEFORE STATE_RINGING. Always refresh when the
  * Telecom state changes; otherwise the phone may ring without any call alert UI.
  */
+/** Reposting an identical CallStyle event can retrigger OEM alert animations. */
+internal data class CallAlertSignature(val callIdentity: Int, val state: Int, val caller: String)
+
+internal fun needsCallNotificationUpdate(
+    previous: CallAlertSignature?, latest: CallAlertSignature
+): Boolean = previous != latest
+
 class SCallInCallService : InCallService() {
     companion object {
         private const val INCOMING_NOTIFICATION_ID = 4102
         private const val ONGOING_NOTIFICATION_ID = 4103
     }
 
+    private var lastPostedAlert: CallAlertSignature? = null
     private val callbackByCall = linkedMapOf<Call, Call.Callback>()
     private val stateCheckHandler = Handler(Looper.getMainLooper())
     private val lookupScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -78,6 +86,7 @@ class SCallInCallService : InCallService() {
     }
 
     private fun cancelCallNotifications() {
+        lastPostedAlert = null
         val notifications = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notifications.cancel(INCOMING_NOTIFICATION_ID)
         notifications.cancel(ONGOING_NOTIFICATION_ID)
@@ -257,6 +266,10 @@ class SCallInCallService : InCallService() {
                 ?.takeIf { it.isNotBlank() }
             ?: call.details.handle?.schemeSpecificPart?.takeIf { it.isNotBlank() }
             ?: "Unknown caller"
+        val signature = CallAlertSignature(System.identityHashCode(call), call.state, caller)
+        // The state rechecker may call this several times for one ringing
+        // event. Post only on a genuine state/identity/name change.
+        if (!needsCallNotificationUpdate(lastPostedAlert, signature)) return
         val uiPending = PendingIntent.getActivity(
             this,
             110,
@@ -330,6 +343,7 @@ class SCallInCallService : InCallService() {
                 // notification, instead of mutating an already-visible one.
                 notifications.cancel(previousId)
                 notifications.notify(notificationId, builder.build())
+                lastPostedAlert = signature
             } catch (error: SecurityException) {
                 android.util.Log.w("SCallInCallService", "Call alerts permission blocked", error)
             }
